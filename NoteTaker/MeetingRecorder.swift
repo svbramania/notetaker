@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import CoreMedia
 import Foundation
 import ScreenCaptureKit
@@ -12,6 +13,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var audioInput: AVAssetWriterInput?
+    private var writerSessionStarted = false
     private let queue = DispatchQueue(label: "com.agilemindset.notetaker.system-audio")
 
     private(set) var sessionDirectory: URL?
@@ -30,14 +32,19 @@ final class MeetingRecorder: NSObject, ObservableObject {
         sessionDirectory = folder
 
         try startMicrophone(in: folder)
-        try await startSystemAudio(in: folder)
+        do {
+            try await startSystemAudio(in: folder)
+        } catch {
+            micRecorder?.stop()
+            micRecorder = nil
+            throw error
+        }
 
         isRecording = true
         status = "Recording microphone + system audio"
     }
 
     func stop() async {
-        guard isRecording else { return }
         micRecorder?.stop()
         micRecorder = nil
 
@@ -47,11 +54,12 @@ final class MeetingRecorder: NSObject, ObservableObject {
         self.stream = nil
 
         audioInput?.markAsFinished()
-        if let writer {
+        if let writer, writer.status == .writing {
             await writer.finishWriting()
         }
         self.writer = nil
         self.audioInput = nil
+        writerSessionStarted = false
 
         isRecording = false
         status = "Recording saved locally"
@@ -110,6 +118,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
 
         self.writer = writer
         self.audioInput = input
+        writerSessionStarted = false
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
@@ -122,29 +131,14 @@ extension MeetingRecorder: SCStreamOutput {
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
         guard outputType == .audio, sampleBuffer.isValid else { return }
         Task { @MainActor in
-            guard let writer = self.writer, let input = self.audioInput else { return }
-            if writer.status == .writing, writer.startSessionIfNeeded(at: sampleBuffer.presentationTimeStamp), input.isReadyForMoreMediaData {
+            guard let writer = self.writer, let input = self.audioInput, writer.status == .writing else { return }
+            if !self.writerSessionStarted {
+                writer.startSession(atSourceTime: sampleBuffer.presentationTimeStamp)
+                self.writerSessionStarted = true
+            }
+            if input.isReadyForMoreMediaData {
                 input.append(sampleBuffer)
             }
         }
-    }
-}
-
-private extension AVAssetWriter {
-    func startSessionIfNeeded(at time: CMTime) -> Bool {
-        if status == .writing {
-            if sessionStartTime == nil {
-                startSession(atSourceTime: time)
-                sessionStartTime = time
-            }
-            return true
-        }
-        return false
-    }
-
-    private static var times: [ObjectIdentifier: CMTime] = [:]
-    var sessionStartTime: CMTime? {
-        get { Self.times[ObjectIdentifier(self)] }
-        set { Self.times[ObjectIdentifier(self)] = newValue }
     }
 }
