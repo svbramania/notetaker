@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -124,9 +125,10 @@ struct ContentView: View {
 
         do {
             let client = OpenAIClient(apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
-            async let micText = client.transcribe(audioURL: mic, sourceLabel: "LOCAL USER / MICROPHONE")
-            async let systemText = client.transcribe(audioURL: system, sourceLabel: "REMOTE PARTICIPANTS / SYSTEM AUDIO")
-            let transcript = try await [micText, systemText].joined(separator: "\n\n")
+            async let micTextTask = client.transcribe(audioURL: mic, sourceLabel: "LOCAL USER / MICROPHONE")
+            async let systemTextTask = client.transcribe(audioURL: system, sourceLabel: "REMOTE PARTICIPANTS / SYSTEM AUDIO")
+            let (micText, systemText) = try await (micTextTask, systemTextTask)
+            let transcript = [micText, systemText].joined(separator: "\n\n")
             let names = attendees.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             let notes = try await client.generateNotes(
                 title: title,
