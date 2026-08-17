@@ -1,0 +1,6 @@
+DerivedData/
+.build/
+*.xcuserstate
+xcuserdata/
+NoteTaker.xcodeproj/project.xcworkspace/xcuserdata/
+NoteTaker.xcodeproj/xcuserdata/

@@ -1,0 +1,21 @@
+name: NoteTaker
+options:
+  bundleIdPrefix: com.agilemindset
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: 14.0
+targets:
+  NoteTaker:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - NoteTaker
+    info:
+      path: NoteTaker/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.agilemindset.notetaker
+        PRODUCT_NAME: NoteTaker
+        SWIFT_VERSION: 5.0
+        CODE_SIGN_STYLE: Automatic
