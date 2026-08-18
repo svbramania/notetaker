@@ -6,9 +6,10 @@
   <key>CFBundleName</key><string>NoteTaker</string>
   <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
   <key>CFBundleVersion</key><string>1</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
+  <key>CFBundleShortVersionString</key><string>0.2.1</string>
   <key>NSMicrophoneUsageDescription</key><string>NoteTaker records your microphone to create a local meeting scribe.</string>
   <key>NSScreenCaptureUsageDescription</key><string>NoteTaker captures system audio from calls and meetings.</string>
+  <key>NSAudioCaptureUsageDescription</key><string>NoteTaker captures system audio from meetings so it can create a local scribe.</string>
   <key>NSSpeechRecognitionUsageDescription</key><string>NoteTaker transcribes recorded meeting audio locally on this Mac.</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
 </dict>
