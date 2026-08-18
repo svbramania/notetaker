@@ -13,6 +13,17 @@ targets:
       - NoteTaker
     info:
       path: NoteTaker/Info.plist
+      properties:
+        CFBundleDisplayName: NoteTaker
+        CFBundleName: NoteTaker
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "0.2.2"
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: NoteTaker records your microphone to create a local meeting scribe.
+        NSSpeechRecognitionUsageDescription: NoteTaker transcribes recorded meeting audio locally on this Mac.
+        NSScreenCaptureUsageDescription: NoteTaker captures system audio from calls and meetings.
+        NSAudioCaptureUsageDescription: NoteTaker captures system audio from calls and meetings to include spoken content in the local meeting scribe.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.agilemindset.notetaker
