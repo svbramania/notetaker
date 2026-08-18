@@ -160,9 +160,10 @@ struct ContentView: View {
 
         do {
             try await scribe.requestAuthorization()
-            async let micEntries = scribe.transcribeFile(mic, source: .microphone, meetingStart: start)
-            async let systemEntries = scribe.transcribeFile(system, source: .systemAudio, meetingStart: start)
-            let spoken = try await micEntries + systemEntries
+            async let micEntriesTask = scribe.transcribeFile(mic, source: .microphone, meetingStart: start)
+            async let systemEntriesTask = scribe.transcribeFile(system, source: .systemAudio, meetingStart: start)
+            let (micEntries, systemEntries) = try await (micEntriesTask, systemEntriesTask)
+            let spoken = micEntries + systemEntries
             let allEntries = (entries + spoken).sorted { $0.timestamp < $1.timestamp }
             entries = allEntries
 
