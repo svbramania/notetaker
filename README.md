@@ -4,8 +4,9 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 
 ## MVP capabilities
 
-- Records microphone audio locally.
-- Records macOS system/output audio locally using ScreenCaptureKit.
+- Uses ScreenCaptureKit for both microphone and macOS system/output audio capture.
+- Keeps microphone and system audio as separate local tracks.
+- Registers a screen output but discards video frames; this keeps the ScreenCaptureKit stream healthy without storing screen video.
 - Captures meeting title and known attendees entered by the user.
 - Lets you paste or type relevant meeting chat and personal notes with timestamps.
 - Uses Apple's on-device Speech framework for transcription; no OpenAI API key is required.
@@ -20,8 +21,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 
 ## Requirements
 
-- macOS 14+
-- Xcode
+- macOS 15+
+- Xcode 16+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 - A language/locale for which macOS supports on-device speech recognition
 
@@ -33,7 +34,7 @@ xcodegen generate
 open NoteTaker.xcodeproj
 ```
 
-In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Microphone, Screen Recording, and Speech Recognition permissions.
+In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Microphone, Screen & System Audio Recording, and Speech Recognition permissions.
 
 ## Use
 
@@ -62,7 +63,7 @@ This version intentionally avoids generative summarization. It only promotes sta
 
 ## Current MVP limitations
 
-- Microphone and system audio are recorded separately. Each track has its own timeline from the same meeting start time, but precise cross-track ordering may be imperfect.
+- Microphone and system audio are stored in separate files. Both come from the same ScreenCaptureKit stream, which improves timing consistency, but the files are still transcribed independently.
 - Apple Speech availability and on-device language support vary by macOS version and locale.
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
