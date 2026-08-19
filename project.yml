@@ -3,12 +3,12 @@ options:
   bundleIdPrefix: com.agilemindset
 settings:
   base:
-    MACOSX_DEPLOYMENT_TARGET: 14.0
+    MACOSX_DEPLOYMENT_TARGET: 15.0
 targets:
   NoteTaker:
     type: application
     platform: macOS
-    deploymentTarget: "14.0"
+    deploymentTarget: "15.0"
     sources:
       - NoteTaker
     settings:
@@ -18,11 +18,11 @@ targets:
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: 0.2.3
+        MARKETING_VERSION: 0.3.0
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_CFBundleDisplayName: NoteTaker
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
         INFOPLIST_KEY_NSMicrophoneUsageDescription: NoteTaker records your microphone to create a local meeting scribe.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: NoteTaker transcribes recorded meeting audio locally on this Mac.
-        INFOPLIST_KEY_NSScreenCaptureUsageDescription: NoteTaker captures system audio from calls and meetings.
+        INFOPLIST_KEY_NSScreenCaptureUsageDescription: NoteTaker captures screen and system audio from calls and meetings.
         INFOPLIST_KEY_NSAudioCaptureUsageDescription: NoteTaker captures system audio from calls and meetings to include spoken content in the local meeting scribe.
