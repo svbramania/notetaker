@@ -1,6 +1,6 @@
 # NoteTaker Scribe
 
-A local-first macOS meeting scribe that captures microphone audio, system/output audio, and typed meeting chat or notes. It transcribes speech on-device with Apple's Speech framework and saves a timestamped meeting record with conservative Pyramid-style extraction.
+A local-first macOS meeting scribe that captures microphone audio, system/output audio, and typed meeting chat or notes. It transcribes speech on-device with Apple's Speech framework, saves a complete timestamped transcript, and hands the transcript to the user's existing ChatGPT account for summarization.
 
 ## MVP capabilities
 
@@ -10,14 +10,11 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Captures meeting title and known attendees entered by the user.
 - Lets you paste or type relevant meeting chat and personal notes with timestamps.
 - Uses Apple's on-device Speech framework for transcription; no OpenAI API key is required.
-- Preserves the complete scribe and extracts explicit:
-  - executive takeaway;
-  - decisions;
-  - action items;
-  - open questions and risks;
-  - meeting title, date/time, and attendees.
-- Saves `meeting-scribe.md`, `scribe.json`, `microphone.m4a`, and `system-audio.m4a` under Application Support on your Mac.
-- Does not send meeting audio or text to OpenAI.
+- Preserves everything transcribed from the meeting in timestamp order.
+- Saves `meeting-transcript.md`, `transcript.json`, `chatgpt-summary-prompt.md`, `microphone.m4a`, and `system-audio.m4a` under Application Support on your Mac.
+- Provides **Summarize in ChatGPT**, which copies the transcript and a structured summary prompt, then opens the ChatGPT desktop app or ChatGPT on the web.
+- Uses the user's signed-in ChatGPT account and never asks for an OpenAI API key.
+- Sends content to ChatGPT only when the user pastes the prepared prompt into ChatGPT and submits it.
 
 ## Requirements
 
@@ -43,23 +40,25 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 3. Click **Record Meeting**.
 4. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
 5. Click **Stop Meeting**.
-6. Click **Build Scribe**.
-7. Review the complete local meeting scribe or open the meeting folder.
+6. Click **Build Transcript**.
+7. Review the complete local transcript.
+8. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
+9. Paste into ChatGPT with **Command-V**, then send.
 
-## Pyramid-style output
+## ChatGPT summary output
 
-The software preserves the full evidence first, then surfaces the most important explicit meeting outcomes in this order:
+The prepared ChatGPT prompt requests this Pyramid-style structure:
 
 ```text
-Executive takeaway
-Decisions
-Action items
-Open questions and risks
-Meeting details
-Full scribe
+Executive summary
+Decisions made
+Action items (owner and due date)
+Key discussion points
+Open questions, risks, and dependencies
+Attendees and meeting details
 ```
 
-This version intentionally avoids generative summarization. It only promotes statements that contain explicit decision, commitment, follow-up, blocker, or risk language. The full scribe remains the source of truth.
+The full local transcript remains the source of truth. ChatGPT is asked to use only transcript-supported information and to mark missing owners and dates as “Not stated.” ChatGPT subscriptions and OpenAI API billing are separate, so this app uses a user-controlled ChatGPT handoff rather than making API calls in the background.
 
 ## Current MVP limitations
 
@@ -67,8 +66,8 @@ This version intentionally avoids generative summarization. It only promotes sta
 - Apple Speech availability and on-device language support vary by macOS version and locale.
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
-- Decision/action extraction is rule-based and intentionally conservative rather than AI-generated.
+- ChatGPT summarization requires the user to paste and send the prepared prompt. This keeps the workflow within the user's ChatGPT account without storing account credentials or requiring an API key.
 
 ## Privacy and consent
 
-Meeting audio, transcript, typed content, and reports remain local to your Mac in this version. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
+Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
