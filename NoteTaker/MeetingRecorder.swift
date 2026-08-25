@@ -27,12 +27,16 @@ final class MeetingRecorder: NSObject, ObservableObject {
     private(set) var microphoneURL: URL?
     private(set) var systemAudioURL: URL?
 
+    static var meetingsDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("NoteTaker/Meetings", isDirectory: true)
+    }
+
     func start() async throws {
         guard !isRecording else { return }
         status = "Requesting permissions..."
 
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("NoteTaker/Meetings", isDirectory: true)
+        let root = Self.meetingsDirectory
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
         let folder = root.appendingPathComponent(
