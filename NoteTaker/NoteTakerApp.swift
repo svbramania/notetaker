@@ -31,7 +31,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("NoteTaker Scribe")
                 .font(.largeTitle.bold())
-            Text("Local meeting capture, typed chat, and Pyramid-style meeting record — no API key required")
+            Text("Capture everything said, then summarize it with your ChatGPT account — no API key required")
                 .foregroundStyle(.secondary)
 
             GroupBox("Meeting") {
@@ -52,10 +52,15 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isProcessing)
 
-                Button("Build Scribe") {
-                    Task { await buildScribe() }
+                Button("Build Transcript") {
+                    Task { await buildTranscript() }
                 }
                 .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
+
+                Button("Summarize in ChatGPT") {
+                    openInChatGPT()
+                }
+                .disabled(recorder.isRecording || isProcessing || report.isEmpty)
 
                 if isProcessing { ProgressView().controlSize(.small) }
                 Spacer()
@@ -100,9 +105,9 @@ struct ContentView: View {
                     .textSelection(.enabled)
             }
 
-            GroupBox("Meeting scribe") {
+            GroupBox("Meeting transcript") {
                 ScrollView {
-                    Text(report.isEmpty ? "After the meeting, choose Build Scribe. Spoken audio and typed meeting content will be combined into a local, timestamped meeting record." : report)
+                    Text(report.isEmpty ? "After the meeting, choose Build Transcript. Spoken audio and typed meeting content will be combined into one local, timestamped transcript." : report)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                         .padding(8)
@@ -149,7 +154,7 @@ struct ContentView: View {
         typedEntry = ""
     }
 
-    private func buildScribe() async {
+    private func buildTranscript() async {
         guard let mic = recorder.microphoneURL,
               let system = recorder.systemAudioURL,
               let start = startedAt else { return }
@@ -171,7 +176,7 @@ struct ContentView: View {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
 
-            let built = scribe.buildReport(
+            let built = scribe.buildTranscript(
                 title: title,
                 startedAt: start,
                 endedAt: endedAt ?? Date(),
@@ -180,7 +185,7 @@ struct ContentView: View {
             )
             report = built
             try save(report: built, entries: allEntries)
-            recorder.status = "Local scribe saved"
+            recorder.status = "Transcript saved — ready for ChatGPT"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -188,9 +193,25 @@ struct ContentView: View {
 
     private func save(report: String, entries: [ScribeEntry]) throws {
         guard let folder = recorder.sessionDirectory else { return }
-        try report.write(to: folder.appendingPathComponent("meeting-scribe.md"), atomically: true, encoding: .utf8)
+        try report.write(to: folder.appendingPathComponent("meeting-transcript.md"), atomically: true, encoding: .utf8)
         let data = try JSONEncoder().encode(entries)
-        try data.write(to: folder.appendingPathComponent("scribe.json"), options: .atomic)
+        try data.write(to: folder.appendingPathComponent("transcript.json"), options: .atomic)
+        let prompt = scribe.chatGPTPrompt(for: report)
+        try prompt.write(to: folder.appendingPathComponent("chatgpt-summary-prompt.md"), atomically: true, encoding: .utf8)
+    }
+
+    private func openInChatGPT() {
+        let prompt = scribe.chatGPTPrompt(for: report)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+
+        recorder.status = "Prompt copied — paste it into ChatGPT and send"
+
+        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.openai.chat") {
+            NSWorkspace.shared.openApplication(at: appURL, configuration: .init(), completionHandler: nil)
+        } else if let webURL = URL(string: "https://chatgpt.com/") {
+            NSWorkspace.shared.open(webURL)
+        }
     }
 
     private func time(_ date: Date) -> String {
