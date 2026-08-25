@@ -72,15 +72,11 @@ final class LocalScribe {
         request.addsPunctuation = true
 
         let result = try await recognize(recognizer: recognizer, request: request)
-        return result.bestTranscription.segments.compactMap { segment in
-            let text = segment.substring.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return nil }
-            return ScribeEntry(
-                timestamp: meetingStart.addingTimeInterval(segment.timestamp),
-                source: source,
-                text: text
-            )
-        }
+        return groupIntoUtterances(
+            result.bestTranscription.segments,
+            source: source,
+            meetingStart: meetingStart
+        )
     }
 
     func transcribeFileAllowingSilence(
@@ -119,6 +115,76 @@ final class LocalScribe {
                 }
             }
         }
+    }
+
+    private func groupIntoUtterances(
+        _ segments: [SFTranscriptionSegment],
+        source: ScribeEntry.Source,
+        meetingStart: Date
+    ) -> [ScribeEntry] {
+        let pauseThreshold: TimeInterval = 1.0
+        let maximumWordsPerUtterance = 35
+        var entries: [ScribeEntry] = []
+        var words: [String] = []
+        var utteranceStart: TimeInterval = 0
+        var previousSegmentEnd: TimeInterval?
+
+        func flushUtterance() {
+            guard !words.isEmpty else { return }
+            entries.append(
+                ScribeEntry(
+                    timestamp: meetingStart.addingTimeInterval(utteranceStart),
+                    source: source,
+                    text: joinTranscriptionTokens(words)
+                )
+            )
+            words.removeAll(keepingCapacity: true)
+        }
+
+        for segment in segments {
+            let word = segment.substring.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !word.isEmpty else { continue }
+
+            if let previousSegmentEnd,
+               segment.timestamp - previousSegmentEnd >= pauseThreshold {
+                flushUtterance()
+            }
+
+            if words.isEmpty {
+                utteranceStart = segment.timestamp
+            }
+
+            words.append(word)
+            previousSegmentEnd = segment.timestamp + segment.duration
+
+            if endsSentence(word) || words.count >= maximumWordsPerUtterance {
+                flushUtterance()
+            }
+        }
+
+        flushUtterance()
+        return entries
+    }
+
+    private func joinTranscriptionTokens(_ tokens: [String]) -> String {
+        let punctuationWithoutLeadingSpace = CharacterSet(charactersIn: ",.!?;:%)]}")
+        var result = ""
+
+        for token in tokens {
+            let attachesToPrevious = token.unicodeScalars.first
+                .map { punctuationWithoutLeadingSpace.contains($0) } ?? false
+            if result.isEmpty || attachesToPrevious {
+                result += token
+            } else {
+                result += " \(token)"
+            }
+        }
+        return result
+    }
+
+    private func endsSentence(_ text: String) -> Bool {
+        guard let lastCharacter = text.last else { return false }
+        return ".!?".contains(lastCharacter)
     }
 
     func buildTranscript(
