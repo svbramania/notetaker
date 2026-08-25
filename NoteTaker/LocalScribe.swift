@@ -97,7 +97,7 @@ final class LocalScribe {
         }
     }
 
-    func buildReport(
+    func buildTranscript(
         title: String,
         startedAt: Date,
         endedAt: Date,
@@ -105,38 +105,12 @@ final class LocalScribe {
         entries: [ScribeEntry]
     ) -> String {
         let sorted = entries.sorted { $0.timestamp < $1.timestamp }
-        let decisionEntries = sorted.filter { containsAny($0.text, needles: ["we decided", "decision", "agreed", "we will", "approved"]) }
-        let actionEntries = sorted.filter { containsAny($0.text, needles: ["action item", "follow up", "follow-up", "i'll", "i will", "you will", "can you", "please", "by friday", "by monday", "due "]) }
-        let riskEntries = sorted.filter { containsAny($0.text, needles: ["risk", "blocker", "blocked", "concern", "issue", "open question", "unclear", "depends on"]) }
-
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
 
         var lines: [String] = []
-        lines.append("# \(title.isEmpty ? "Meeting" : title)")
-        lines.append("")
-        lines.append("## Executive takeaway")
-        if let firstDecision = decisionEntries.first {
-            lines.append(firstDecision.text)
-        } else if let firstAction = actionEntries.first {
-            lines.append("The meeting produced a concrete follow-up: \(firstAction.text)")
-        } else {
-            lines.append("The complete meeting scribe is preserved below. No explicit decision or commitment was detected automatically.")
-        }
-
-        lines.append("")
-        lines.append("## Decisions")
-        append(entries: decisionEntries, to: &lines)
-
-        lines.append("")
-        lines.append("## Action items")
-        append(entries: actionEntries, to: &lines)
-
-        lines.append("")
-        lines.append("## Open questions and risks")
-        append(entries: riskEntries, to: &lines)
-
+        lines.append("# \(title.isEmpty ? "Meeting transcript" : title)")
         lines.append("")
         lines.append("## Meeting details")
         lines.append("- Date: \(formatter.string(from: startedAt))")
@@ -144,26 +118,35 @@ final class LocalScribe {
         lines.append("- Attendees: \(attendees.isEmpty ? "Not provided" : attendees.joined(separator: ", "))")
 
         lines.append("")
-        lines.append("## Full scribe")
-        for entry in sorted {
-            lines.append("- [\(time(entry.timestamp))] **\(entry.source.rawValue):** \(entry.text)")
+        lines.append("## Complete transcript")
+        if sorted.isEmpty {
+            lines.append("No spoken or typed meeting content was transcribed.")
+        } else {
+            for entry in sorted {
+                lines.append("- [\(time(entry.timestamp))] **\(entry.source.rawValue):** \(entry.text)")
+            }
         }
         return lines.joined(separator: "\n")
     }
 
-    private func append(entries: [ScribeEntry], to lines: inout [String]) {
-        if entries.isEmpty {
-            lines.append("- None explicitly detected.")
-        } else {
-            for entry in entries {
-                lines.append("- [\(time(entry.timestamp))] \(entry.text)")
-            }
-        }
-    }
+    func chatGPTPrompt(for transcript: String) -> String {
+        """
+        Summarize the meeting transcript below. Use only information supported by the transcript.
 
-    private func containsAny(_ text: String, needles: [String]) -> Bool {
-        let lower = text.lowercased()
-        return needles.contains { lower.contains($0) }
+        Follow this structure and lead with the most important conclusion:
+        1. Executive summary
+        2. Decisions made
+        3. Action items in a table with owner and due date; write "Not stated" when either is absent
+        4. Key discussion points
+        5. Open questions, risks, and dependencies
+        6. Attendees and meeting details
+
+        Keep names, numbers, dates, commitments, and qualifications accurate. Clearly label anything unclear in the transcript. Do not invent missing information.
+
+        --- TRANSCRIPT START ---
+        \(transcript)
+        --- TRANSCRIPT END ---
+        """
     }
 
     private func time(_ date: Date) -> String {
