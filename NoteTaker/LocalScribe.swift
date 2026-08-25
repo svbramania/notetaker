@@ -26,6 +26,7 @@ enum LocalScribeError: LocalizedError {
     case speechPermissionDenied
     case recognizerUnavailable
     case onDeviceRecognitionUnavailable
+    case noSpeechDetected
 
     var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ enum LocalScribeError: LocalizedError {
             return "Apple Speech Recognition is not available for the selected language."
         case .onDeviceRecognitionUnavailable:
             return "On-device speech recognition is not available for this language on this Mac."
+        case .noSpeechDetected:
+            return "The recordings were saved, but Apple Speech did not find transcribable speech in either audio track."
         }
     }
 }
@@ -77,6 +80,27 @@ final class LocalScribe {
                 source: source,
                 text: text
             )
+        }
+    }
+
+    func transcribeFileAllowingSilence(
+        _ url: URL,
+        source: ScribeEntry.Source,
+        meetingStart: Date
+    ) async throws -> [ScribeEntry] {
+        do {
+            return try await transcribeFile(url, source: source, meetingStart: meetingStart)
+        } catch {
+            let recognitionError = error as NSError
+            let isAppleNoSpeechError = recognitionError.domain == "kAFAssistantErrorDomain"
+                && recognitionError.code == 1110
+            let descriptionSaysNoSpeech = recognitionError.localizedDescription
+                .localizedCaseInsensitiveContains("no speech")
+
+            if isAppleNoSpeechError || descriptionSaysNoSpeech {
+                return []
+            }
+            throw error
         }
     }
 

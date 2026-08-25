@@ -116,9 +116,7 @@ struct ContentView: View {
             }
 
             HStack {
-                if let folder = recorder.sessionDirectory {
-                    Button("Show Meeting Folder") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
-                }
+                Button("Open Recordings Folder") { openRecordingsFolder() }
                 Spacer()
                 Text("Audio and transcription remain on this Mac. Recording consent laws still apply.")
                     .font(.caption)
@@ -165,10 +163,22 @@ struct ContentView: View {
 
         do {
             try await scribe.requestAuthorization()
-            async let micEntriesTask = scribe.transcribeFile(mic, source: .microphone, meetingStart: start)
-            async let systemEntriesTask = scribe.transcribeFile(system, source: .systemAudio, meetingStart: start)
-            let (micEntries, systemEntries) = try await (micEntriesTask, systemEntriesTask)
+            recorder.status = "Transcribing microphone audio..."
+            let micEntries = try await scribe.transcribeFileAllowingSilence(
+                mic,
+                source: .microphone,
+                meetingStart: start
+            )
+            recorder.status = "Transcribing system audio..."
+            let systemEntries = try await scribe.transcribeFileAllowingSilence(
+                system,
+                source: .systemAudio,
+                meetingStart: start
+            )
             let spoken = micEntries + systemEntries
+            if spoken.isEmpty && entries.isEmpty {
+                throw LocalScribeError.noSpeechDetected
+            }
             let allEntries = (entries + spoken).sorted { $0.timestamp < $1.timestamp }
             entries = allEntries
 
@@ -211,6 +221,16 @@ struct ContentView: View {
             NSWorkspace.shared.openApplication(at: appURL, configuration: .init(), completionHandler: nil)
         } else if let webURL = URL(string: "https://chatgpt.com/") {
             NSWorkspace.shared.open(webURL)
+        }
+    }
+
+    private func openRecordingsFolder() {
+        let folder = MeetingRecorder.meetingsDirectory
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(folder)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

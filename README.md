@@ -13,6 +13,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Preserves everything transcribed from the meeting in timestamp order.
 - Saves `meeting-transcript.md`, `transcript.json`, `chatgpt-summary-prompt.md`, `microphone.m4a`, and `system-audio.m4a` under Application Support on your Mac.
 - Provides **Summarize in ChatGPT**, which copies the transcript and a structured summary prompt, then opens the ChatGPT desktop app or ChatGPT on the web.
+- Transcribes microphone and system audio sequentially and continues when either track contains speech.
+- Keeps **Open Recordings Folder** visible at all times.
 - Uses the user's signed-in ChatGPT account and never asks for an OpenAI API key.
 - Sends content to ChatGPT only when the user pastes the prepared prompt into ChatGPT and submits it.
 
@@ -62,7 +64,7 @@ The full local transcript remains the source of truth. ChatGPT is asked to use o
 
 ## Current MVP limitations
 
-- Microphone and system audio are stored in separate files. Both come from the same ScreenCaptureKit stream, which improves timing consistency, but the files are still transcribed independently.
+- Microphone and system audio are stored in separate files. Both come from the same ScreenCaptureKit stream and are transcribed sequentially so a silent track does not block the other track.
 - Apple Speech availability and on-device language support vary by macOS version and locale.
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
