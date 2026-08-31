@@ -14,6 +14,7 @@ struct NoteTakerApp: App {
 
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
+    @StateObject private var calendarMonitor = CalendarMeetingMonitor()
     @State private var title = ""
     @State private var attendees = ""
     @State private var typedEntry = ""
@@ -28,7 +29,8 @@ struct ContentView: View {
     private let scribe = LocalScribe()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
             Text("NoteTaker Scribe")
                 .font(.largeTitle.bold())
             Text("Capture everything said, then summarize it with your ChatGPT account — no API key required")
@@ -42,6 +44,8 @@ struct ContentView: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(6)
             }
+
+            calendarMeetingSection
 
             HStack(spacing: 12) {
                 Button {
@@ -122,8 +126,83 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            }
+            .padding(20)
         }
-        .padding(20)
+        .task {
+            calendarMonitor.start()
+        }
+    }
+
+    @ViewBuilder
+    private var calendarMeetingSection: some View {
+        GroupBox("Upcoming video meetings") {
+            VStack(alignment: .leading, spacing: 10) {
+                if let meeting = calendarMonitor.meetingToPrompt {
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: meeting.provider.systemImage)
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Meeting starts soon—record?")
+                                .font(.headline)
+                            Text("\(meeting.title) • \(meeting.provider.rawValue) • \(meetingTime(meeting.startDate))")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Record Meeting") {
+                            prepareAndRecord(meeting)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(recorder.isRecording || isProcessing)
+
+                        Button("Dismiss") {
+                            calendarMonitor.dismissPrompt()
+                        }
+                    }
+                } else if calendarMonitor.calendarAccessGranted {
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundStyle(.secondary)
+                        if let meeting = calendarMonitor.nextMeeting {
+                            Text("Next: \(meeting.title) at \(meetingTime(meeting.startDate)) on \(meeting.provider.rawValue)")
+                        } else {
+                            Text("Watching Calendar for Teams, Zoom, and Google Meet links")
+                        }
+                        Spacer()
+                        if calendarMonitor.notificationAccessGranted {
+                            Button("Refresh") {
+                                Task { await calendarMonitor.refresh() }
+                            }
+                        } else {
+                            Button("Enable Notifications") {
+                                Task { await calendarMonitor.requestNotificationPermission() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                } else {
+                    HStack {
+                        Image(systemName: "calendar.badge.plus")
+                            .foregroundStyle(.secondary)
+                        Text("Connect macOS Calendar to receive a recording prompt five minutes before supported video meetings.")
+                        Spacer()
+                        Button("Enable Calendar Alerts") {
+                            Task { await calendarMonitor.requestAccess() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                Text(calendarMonitor.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(6)
+        }
     }
 
     private func toggleRecording() async {
@@ -143,6 +222,13 @@ struct ContentView: View {
             errorMessage = error.localizedDescription
             await recorder.stop()
         }
+    }
+
+    private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
+        title = meeting.title
+        attendees = meeting.attendeeNames.joined(separator: ", ")
+        calendarMonitor.dismissPrompt()
+        Task { await toggleRecording() }
     }
 
     private func addTypedEntry() {
@@ -237,6 +323,13 @@ struct ContentView: View {
     private func time(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
+    }
+
+    private func meetingTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
         return formatter.string(from: date)
     }
 }
