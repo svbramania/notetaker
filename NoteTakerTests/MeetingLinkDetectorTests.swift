@@ -87,6 +87,28 @@ final class CalendarMeetingTimelineTests: XCTestCase {
     }
 }
 
+final class RecordingFolderNamerTests: XCTestCase {
+    func testUsesCalendarTitleAndTimestamp() {
+        let date = Date(timeIntervalSince1970: 0)
+
+        XCTAssertEqual(
+            RecordingFolderNamer.folderName(for: "Quarterly Planning", at: date),
+            "Quarterly Planning - 1970-01-01T00-00-00.000Z"
+        )
+    }
+
+    func testRemovesUnsafeFolderCharacters() {
+        XCTAssertEqual(
+            RecordingFolderNamer.sanitizedTitle("  Product / Design: Review\n"),
+            "Product - Design - Review"
+        )
+    }
+
+    func testUsesMeetingForBlankTitle() {
+        XCTAssertEqual(RecordingFolderNamer.sanitizedTitle("  / :  "), "Meeting")
+    }
+}
+
 final class LocalScribeMergeTests: XCTestCase {
     func testRemovesSameSpeechCapturedByBothTracks() {
         let timestamp = Date(timeIntervalSince1970: 1_000)
