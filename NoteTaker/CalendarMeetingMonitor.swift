@@ -31,6 +31,38 @@ struct UpcomingVideoMeeting: Identifiable, Equatable {
     let attendeeNames: [String]
 }
 
+enum CalendarMeetingTimeline {
+    static func activeMeeting(
+        in meetings: [UpcomingVideoMeeting],
+        at date: Date
+    ) -> UpcomingVideoMeeting? {
+        meetings
+            .filter { $0.startDate <= date && $0.endDate > date }
+            .sorted { $0.startDate < $1.startDate }
+            .first
+    }
+
+    static func nextMeeting(
+        in meetings: [UpcomingVideoMeeting],
+        after date: Date
+    ) -> UpcomingVideoMeeting? {
+        meetings
+            .filter { $0.startDate > date }
+            .sorted { $0.startDate < $1.startDate }
+            .first
+    }
+
+    static func nextBoundary(
+        in meetings: [UpcomingVideoMeeting],
+        after date: Date
+    ) -> Date? {
+        meetings
+            .flatMap { [$0.startDate, $0.endDate] }
+            .filter { $0 > date }
+            .min()
+    }
+}
+
 enum MeetingLinkDetector {
     static func detect(in text: String) -> (provider: MeetingProvider, url: URL?)? {
         let candidates = detectedURLs(in: text)
@@ -86,6 +118,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     @Published private(set) var calendarAccessGranted = false
     @Published private(set) var notificationAccessGranted = false
     @Published private(set) var nextMeeting: UpcomingVideoMeeting?
+    @Published private(set) var activeMeeting: UpcomingVideoMeeting?
     @Published private(set) var meetingToPrompt: UpcomingVideoMeeting?
     @Published private(set) var status = "Calendar alerts are not enabled"
 
@@ -95,6 +128,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     private let notificationCenter = UNUserNotificationCenter.current()
     private var refreshTask: Task<Void, Never>?
     private var dismissedPromptIDs: Set<String> = []
+    private var nextCalendarBoundary: Date?
 
     override init() {
         super.init()
@@ -113,7 +147,12 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             guard let self else { return }
             while !Task.isCancelled {
                 await self.refresh()
-                try? await Task.sleep(for: .seconds(60))
+                let delay = self.refreshDelay(after: Date())
+                do {
+                    try await Task.sleep(for: .seconds(delay))
+                } catch {
+                    break
+                }
             }
         }
     }
@@ -147,15 +186,23 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
 
         guard calendarAccessGranted else {
             nextMeeting = nil
+            activeMeeting = nil
             meetingToPrompt = nil
+            nextCalendarBoundary = nil
             status = "Enable Calendar access to detect video meetings"
             return
         }
 
         let now = Date()
-        let meetings = videoMeetings(from: now, through: now.addingTimeInterval(24 * 60 * 60))
+        let meetings = videoMeetings(
+            from: now.addingTimeInterval(-(24 * 60 * 60)),
+            through: now.addingTimeInterval(24 * 60 * 60)
+        )
+        .filter { $0.endDate > now }
         dismissedPromptIDs.formIntersection(Set(meetings.map(\.id)))
-        nextMeeting = meetings.first
+        activeMeeting = CalendarMeetingTimeline.activeMeeting(in: meetings, at: now)
+        nextMeeting = CalendarMeetingTimeline.nextMeeting(in: meetings, after: now)
+        nextCalendarBoundary = CalendarMeetingTimeline.nextBoundary(in: meetings, after: now)
         meetingToPrompt = meetings.first { meeting in
             let secondsUntilStart = meeting.startDate.timeIntervalSince(now)
             return !dismissedPromptIDs.contains(meeting.id)
@@ -165,7 +212,9 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
 
         if notificationAccessGranted {
             await scheduleNotifications(for: meetings, now: now)
-            status = meetings.isEmpty
+            status = activeMeeting != nil
+                ? "Calendar meeting in progress"
+                : meetings.isEmpty
                 ? "Watching Calendar for Teams, Zoom, and Google Meet"
                 : "Meeting alert scheduled"
         } else {
@@ -178,6 +227,11 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             dismissedPromptIDs.insert(meetingToPrompt.id)
         }
         meetingToPrompt = nil
+    }
+
+    private func refreshDelay(after date: Date) -> TimeInterval {
+        guard let nextCalendarBoundary else { return 60 }
+        return min(60, max(0.25, nextCalendarBoundary.timeIntervalSince(date) + 0.1))
     }
 
     private func requestCalendarAccess() async throws -> Bool {

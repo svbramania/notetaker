@@ -22,6 +22,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Recognizes Microsoft Teams, Google Meet, and Zoom links in event URLs, locations, and notes.
 - Schedules a local **Meeting starts soon—record?** notification five minutes before a recognized call.
 - Displays the upcoming meeting in NoteTaker and fills its title and attendee names when recording begins.
+- Provides a saved **Auto-record calendar meetings** switch that starts recording at a supported calendar event's start time and stops at its end time.
+- Keeps manual recordings independent, so calendar boundaries never stop a recording that the user started manually.
 - Provides a separate **Allow Access to Mic and Speakers** button with individual readiness indicators for microphone and system audio.
 - Splits long recordings into 50-second files for reliable Apple Speech recognition, then rebuilds the complete timeline.
 - Removes substantially matching speech captured by both the microphone and system-audio tracks while preserving distinct contributions.
@@ -48,14 +50,15 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 1. Choose **Enable Calendar Alerts** to detect upcoming Teams, Meet, and Zoom meetings from macOS Calendar.
 2. Allow Calendar and Notification access when macOS asks.
 3. Choose **Allow Access to Mic and Speakers**, then approve Microphone and Screen & System Audio Recording access.
-4. Enter the meeting title and attendees manually, or wait for a detected meeting prompt.
-5. Click **Record Meeting**. From an upcoming-meeting prompt, the title and available attendee names are filled automatically.
-6. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
-7. Click **Stop Meeting**.
-8. Click **Build Transcript**.
-9. Review the complete local transcript.
-10. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
-11. Paste into ChatGPT with **Command-V**, then send.
+4. Optionally turn on **Auto-record calendar meetings**. Keep NoteTaker running; recognized meetings will record from their calendar start time through their end time.
+5. Enter the meeting title and attendees manually, wait for a detected meeting prompt, or use calendar auto-recording.
+6. Click **Record Meeting** for a manual recording. From an upcoming-meeting prompt or automatic recording, the title and available attendee names are filled automatically.
+7. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
+8. Click **Stop Meeting** for a manual recording; an automatic recording stops at the calendar event's end time.
+9. Click **Build Transcript**.
+10. Review the complete local transcript.
+11. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
+12. Paste into ChatGPT with **Command-V**, then send.
 
 ## ChatGPT summary output
 
@@ -81,6 +84,7 @@ The full local transcript remains the source of truth. ChatGPT is asked to use o
 - ChatGPT summarization requires the user to paste and send the prepared prompt. This keeps the workflow within the user's ChatGPT account without storing account credentials or requiring an API key.
 - Calendar detection uses events available through macOS Calendar. Direct Microsoft 365, Google Workspace, and Zoom account connections are not required.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
+- Calendar auto-recording works while NoteTaker is running. It does not launch a closed application at an event's start time.
 
 ## Privacy and consent
 

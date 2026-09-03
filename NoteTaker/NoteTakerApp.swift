@@ -26,6 +26,11 @@ struct ContentView: View {
     @State private var endedAt: Date?
     @State private var isProcessing = false
     @State private var errorMessage: String?
+    @State private var autoRecordedMeetingID: String?
+    @State private var skippedAutoMeetingIDs: Set<String> = []
+    @State private var isSynchronizingAutoRecording = false
+    @State private var autoRecordingSyncPending = false
+    @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = false
 
     private let scribe = LocalScribe()
 
@@ -135,8 +140,18 @@ struct ContentView: View {
         .task {
             calendarMonitor.start()
         }
+        .onChange(of: calendarMonitor.activeMeeting, initial: true) { _, _ in
+            Task { await synchronizeCalendarRecording() }
+        }
+        .onChange(of: autoRecordCalendarMeetings) { _, _ in
+            Task { await synchronizeCalendarRecording() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recordingPermissions.refresh()
+            Task {
+                await calendarMonitor.refresh()
+                await synchronizeCalendarRecording()
+            }
         }
     }
 
@@ -194,6 +209,29 @@ struct ContentView: View {
     private var calendarMeetingSection: some View {
         GroupBox("Upcoming video meetings") {
             VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    Toggle("Auto-record calendar meetings", isOn: $autoRecordCalendarMeetings)
+                        .toggleStyle(.switch)
+                        .disabled(!calendarMonitor.calendarAccessGranted)
+
+                    Spacer()
+
+                    if autoRecordCalendarMeetings {
+                        Label("On", systemImage: "calendar.badge.checkmark")
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                Text(
+                    autoRecordCalendarMeetings
+                        ? "NoteTaker will start at each supported calendar event's start time and stop at its end time. Keep NoteTaker running and confirm participants have consented to recording."
+                        : "Turn this on to start and stop recording automatically from Teams, Zoom, and Google Meet calendar times."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                Divider()
+
                 if let meeting = calendarMonitor.meetingToPrompt {
                     HStack(alignment: .center, spacing: 12) {
                         Image(systemName: meeting.provider.systemImage)
@@ -265,6 +303,10 @@ struct ContentView: View {
         errorMessage = nil
         do {
             if recorder.isRecording {
+                if let autoRecordedMeetingID {
+                    skippedAutoMeetingIDs.insert(autoRecordedMeetingID)
+                    self.autoRecordedMeetingID = nil
+                }
                 await recorder.stop()
                 endedAt = Date()
             } else {
@@ -278,6 +320,74 @@ struct ContentView: View {
             errorMessage = error.localizedDescription
             await recorder.stop()
         }
+    }
+
+    private func synchronizeCalendarRecording() async {
+        if isSynchronizingAutoRecording {
+            autoRecordingSyncPending = true
+            return
+        }
+
+        isSynchronizingAutoRecording = true
+        repeat {
+            autoRecordingSyncPending = false
+            await applyCalendarRecordingState()
+        } while autoRecordingSyncPending
+        isSynchronizingAutoRecording = false
+    }
+
+    private func applyCalendarRecordingState() async {
+        let activeMeeting = calendarMonitor.activeMeeting
+
+        if let activeMeeting {
+            skippedAutoMeetingIDs.formIntersection([activeMeeting.id])
+        } else {
+            skippedAutoMeetingIDs.removeAll()
+        }
+
+        guard autoRecordCalendarMeetings else {
+            await stopAutomaticRecording(status: "Calendar auto-record turned off — recording saved locally")
+            return
+        }
+
+        if let autoRecordedMeetingID, autoRecordedMeetingID != activeMeeting?.id {
+            await stopAutomaticRecording(status: "Calendar meeting ended — recording saved locally")
+        }
+
+        guard let activeMeeting,
+              !skippedAutoMeetingIDs.contains(activeMeeting.id),
+              autoRecordedMeetingID == nil,
+              !recorder.isRecording,
+              !isProcessing else { return }
+
+        title = activeMeeting.title
+        attendees = activeMeeting.attendeeNames.joined(separator: ", ")
+        report = ""
+        entries = []
+        startedAt = Date()
+        endedAt = nil
+        errorMessage = nil
+
+        do {
+            try await recorder.start()
+            autoRecordedMeetingID = activeMeeting.id
+            recorder.status = "Auto-recording until \(meetingTime(activeMeeting.endDate))"
+        } catch {
+            errorMessage = "Could not auto-record \(activeMeeting.title): \(error.localizedDescription)"
+            skippedAutoMeetingIDs.insert(activeMeeting.id)
+            await recorder.stop()
+        }
+    }
+
+    private func stopAutomaticRecording(status: String) async {
+        guard autoRecordedMeetingID != nil else { return }
+
+        if recorder.isRecording {
+            await recorder.stop()
+            endedAt = Date()
+            recorder.status = status
+        }
+        autoRecordedMeetingID = nil
     }
 
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
