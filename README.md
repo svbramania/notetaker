@@ -23,6 +23,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Schedules a local **Meeting starts soon—record?** notification five minutes before a recognized call.
 - Displays the upcoming meeting in NoteTaker and fills its title and attendee names when recording begins.
 - Provides a separate **Allow Access to Mic and Speakers** button with individual readiness indicators for microphone and system audio.
+- Splits long recordings into 50-second files for reliable Apple Speech recognition, then rebuilds the complete timeline.
+- Removes substantially matching speech captured by both the microphone and system-audio tracks while preserving distinct contributions.
 
 ## Requirements
 
@@ -72,7 +74,7 @@ The full local transcript remains the source of truth. ChatGPT is asked to use o
 
 ## Current MVP limitations
 
-- Microphone and system audio are stored in separate files. Both come from the same ScreenCaptureKit stream and are transcribed sequentially so a silent track does not block the other track.
+- Microphone and system audio are stored in separate files. Both come from the same ScreenCaptureKit stream and are transcribed sequentially in 50-second chunks so a silent or failed chunk does not block the rest of the meeting.
 - Apple Speech availability and on-device language support vary by macOS version and locale.
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
