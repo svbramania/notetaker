@@ -22,6 +22,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Recognizes Microsoft Teams, Google Meet, and Zoom links in event URLs, locations, and notes.
 - Schedules a local **Meeting starts soon—record?** notification five minutes before a recognized call.
 - Displays the upcoming meeting in NoteTaker and fills its title and attendee names when recording begins.
+- Provides a separate **Allow Access to Mic and Speakers** button with individual readiness indicators for microphone and system audio.
 
 ## Requirements
 
@@ -44,14 +45,15 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 
 1. Choose **Enable Calendar Alerts** to detect upcoming Teams, Meet, and Zoom meetings from macOS Calendar.
 2. Allow Calendar and Notification access when macOS asks.
-3. Enter the meeting title and attendees manually, or wait for a detected meeting prompt.
-4. Click **Record Meeting**. From an upcoming-meeting prompt, the title and available attendee names are filled automatically.
-5. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
-6. Click **Stop Meeting**.
-7. Click **Build Transcript**.
-8. Review the complete local transcript.
-9. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
-10. Paste into ChatGPT with **Command-V**, then send.
+3. Choose **Allow Access to Mic and Speakers**, then approve Microphone and Screen & System Audio Recording access.
+4. Enter the meeting title and attendees manually, or wait for a detected meeting prompt.
+5. Click **Record Meeting**. From an upcoming-meeting prompt, the title and available attendee names are filled automatically.
+6. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
+7. Click **Stop Meeting**.
+8. Click **Build Transcript**.
+9. Review the complete local transcript.
+10. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
+11. Paste into ChatGPT with **Command-V**, then send.
 
 ## ChatGPT summary output
 
