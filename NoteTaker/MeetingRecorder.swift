@@ -4,6 +4,36 @@ import CoreMedia
 import Foundation
 import ScreenCaptureKit
 
+enum RecordingFolderNamer {
+    static func sanitizedTitle(_ title: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/:")
+            .union(.controlCharacters)
+        let separated = title.components(separatedBy: invalidCharacters).joined(separator: "-")
+        let compactedWhitespace = separated
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .replacingOccurrences(
+                of: #"\s*-+\s*"#,
+                with: " - ",
+                options: .regularExpression
+            )
+        let trimmed = compactedWhitespace.trimmingCharacters(
+            in: CharacterSet(charactersIn: " .-")
+        )
+        let shortened = String(trimmed.prefix(80)).trimmingCharacters(
+            in: CharacterSet(charactersIn: " .-")
+        )
+        return shortened.isEmpty ? "Meeting" : shortened
+    }
+
+    static func folderName(for title: String?, at date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: date).replacingOccurrences(of: ":", with: "-")
+        return "\(sanitizedTitle(title ?? "")) - \(timestamp)"
+    }
+}
+
 @MainActor
 final class MeetingRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
@@ -32,17 +62,15 @@ final class MeetingRecorder: NSObject, ObservableObject {
             .appendingPathComponent("NoteTaker/Meetings", isDirectory: true)
     }
 
-    func start() async throws {
+    func start(folderTitle: String? = nil) async throws {
         guard !isRecording else { return }
         status = "Requesting permissions..."
 
         let root = Self.meetingsDirectory
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 
-        let folder = root.appendingPathComponent(
-            ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-"),
-            isDirectory: true
-        )
+        let folderName = RecordingFolderNamer.folderName(for: folderTitle, at: Date())
+        let folder = root.appendingPathComponent(folderName, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         sessionDirectory = folder
 
