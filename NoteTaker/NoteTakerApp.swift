@@ -30,7 +30,7 @@ struct ContentView: View {
     @State private var skippedAutoMeetingIDs: Set<String> = []
     @State private var isSynchronizingAutoRecording = false
     @State private var autoRecordingSyncPending = false
-    @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = false
+    @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
 
     private let scribe = LocalScribe()
 
@@ -314,7 +314,7 @@ struct ContentView: View {
                 entries = []
                 startedAt = Date()
                 endedAt = nil
-                try await recorder.start()
+                try await recorder.start(folderTitle: title)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -369,7 +369,7 @@ struct ContentView: View {
         errorMessage = nil
 
         do {
-            try await recorder.start()
+            try await recorder.start(folderTitle: activeMeeting.title)
             autoRecordedMeetingID = activeMeeting.id
             recorder.status = "Auto-recording until \(meetingTime(activeMeeting.endDate))"
         } catch {
