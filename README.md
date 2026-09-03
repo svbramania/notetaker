@@ -23,7 +23,9 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Schedules a local **Meeting starts soon—record?** notification five minutes before a recognized call.
 - Displays the upcoming meeting in NoteTaker and fills its title and attendee names when recording begins.
 - Provides a saved **Auto-record calendar meetings** switch that starts recording at a supported calendar event's start time and stops at its end time.
+- Enables calendar auto-recording by default for new installs while preserving each existing user's saved switch preference.
 - Keeps manual recordings independent, so calendar boundaries never stop a recording that the user started manually.
+- Names each recording folder from its meeting title followed by a timestamp, with a safe `Meeting` fallback for blank titles.
 - Provides a separate **Allow Access to Mic and Speakers** button with individual readiness indicators for microphone and system audio.
 - Splits long recordings into 50-second files for reliable Apple Speech recognition, then rebuilds the complete timeline.
 - Removes substantially matching speech captured by both the microphone and system-audio tracks while preserving distinct contributions.
@@ -50,7 +52,7 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 1. Choose **Enable Calendar Alerts** to detect upcoming Teams, Meet, and Zoom meetings from macOS Calendar.
 2. Allow Calendar and Notification access when macOS asks.
 3. Choose **Allow Access to Mic and Speakers**, then approve Microphone and Screen & System Audio Recording access.
-4. Optionally turn on **Auto-record calendar meetings**. Keep NoteTaker running; recognized meetings will record from their calendar start time through their end time.
+4. **Auto-record calendar meetings** is on by default. Keep NoteTaker running; recognized meetings will record from their calendar start time through their end time. Use the switch to turn this automation off whenever preferred.
 5. Enter the meeting title and attendees manually, wait for a detected meeting prompt, or use calendar auto-recording.
 6. Click **Record Meeting** for a manual recording. From an upcoming-meeting prompt or automatic recording, the title and available attendee names are filled automatically.
 7. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
