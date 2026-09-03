@@ -15,6 +15,7 @@ struct NoteTakerApp: App {
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
     @StateObject private var calendarMonitor = CalendarMeetingMonitor()
+    @StateObject private var recordingPermissions = RecordingPermissionManager()
     @State private var title = ""
     @State private var attendees = ""
     @State private var typedEntry = ""
@@ -46,6 +47,8 @@ struct ContentView: View {
             }
 
             calendarMeetingSection
+
+            recordingPermissionSection
 
             HStack(spacing: 12) {
                 Button {
@@ -132,6 +135,59 @@ struct ContentView: View {
         .task {
             calendarMonitor.start()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            recordingPermissions.refresh()
+        }
+    }
+
+    @ViewBuilder
+    private var recordingPermissionSection: some View {
+        GroupBox("Recording access") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 16) {
+                    permissionStatus(
+                        title: "Microphone",
+                        granted: recordingPermissions.microphoneGranted
+                    )
+                    permissionStatus(
+                        title: "Speakers / System Audio",
+                        granted: recordingPermissions.systemAudioGranted
+                    )
+
+                    Spacer()
+
+                    Button("Allow Access to Mic and Speakers") {
+                        Task { await recordingPermissions.requestAccess() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(recordingPermissions.allAccessGranted || recordingPermissions.isRequesting)
+
+                    if !recordingPermissions.allAccessGranted {
+                        Button("Open Privacy Settings") {
+                            recordingPermissions.openPrivacySettings()
+                        }
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    if recordingPermissions.isRequesting {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(recordingPermissions.status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(6)
+        }
+    }
+
+    private func permissionStatus(title: String, granted: Bool) -> some View {
+        Label(
+            "\(title): \(granted ? "Ready" : "Permission required")",
+            systemImage: granted ? "checkmark.circle.fill" : "exclamationmark.circle"
+        )
+        .foregroundStyle(granted ? Color.green : Color.gray)
     }
 
     @ViewBuilder
