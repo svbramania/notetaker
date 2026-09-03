@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Speech
 
@@ -43,6 +44,17 @@ enum LocalScribeError: LocalizedError {
 }
 
 final class LocalScribe {
+    private struct AudioChunk {
+        let url: URL
+        let offset: TimeInterval
+    }
+
+    private struct PreparedAudioChunks {
+        let chunks: [AudioChunk]
+        let temporaryDirectory: URL?
+    }
+
+    private let maximumRecognitionDuration: TimeInterval = 50
     private let locale: Locale
 
     init(locale: Locale = .current) {
@@ -66,6 +78,47 @@ final class LocalScribe {
             throw LocalScribeError.onDeviceRecognitionUnavailable
         }
 
+        let prepared = try await prepareAudioChunks(for: url)
+        defer {
+            if let temporaryDirectory = prepared.temporaryDirectory {
+                try? FileManager.default.removeItem(at: temporaryDirectory)
+            }
+        }
+
+        var entries: [ScribeEntry] = []
+        var firstRecognitionError: Error?
+
+        for chunk in prepared.chunks {
+            do {
+                let chunkEntries = try await transcribeSingleFile(
+                    chunk.url,
+                    recognizer: recognizer,
+                    source: source,
+                    meetingStart: meetingStart.addingTimeInterval(chunk.offset)
+                )
+                entries.append(contentsOf: chunkEntries)
+            } catch {
+                if isNoSpeechError(error) {
+                    continue
+                }
+                firstRecognitionError = firstRecognitionError ?? error
+            }
+        }
+
+        if entries.isEmpty, let firstRecognitionError {
+            throw firstRecognitionError
+        }
+
+        return entries.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func transcribeSingleFile(
+        _ url: URL,
+        recognizer: SFSpeechRecognizer,
+        source: ScribeEntry.Source,
+        meetingStart: Date
+    ) async throws -> [ScribeEntry] {
+
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
@@ -87,17 +140,150 @@ final class LocalScribe {
         do {
             return try await transcribeFile(url, source: source, meetingStart: meetingStart)
         } catch {
-            let recognitionError = error as NSError
-            let isAppleNoSpeechError = recognitionError.domain == "kAFAssistantErrorDomain"
-                && recognitionError.code == 1110
-            let descriptionSaysNoSpeech = recognitionError.localizedDescription
-                .localizedCaseInsensitiveContains("no speech")
-
-            if isAppleNoSpeechError || descriptionSaysNoSpeech {
+            if isNoSpeechError(error) {
                 return []
             }
             throw error
         }
+    }
+
+    func mergeSpokenEntries(
+        microphone: [ScribeEntry],
+        systemAudio: [ScribeEntry]
+    ) -> [ScribeEntry] {
+        var merged = systemAudio
+
+        for microphoneEntry in microphone {
+            let isDuplicate = systemAudio.contains { systemEntry in
+                abs(systemEntry.timestamp.timeIntervalSince(microphoneEntry.timestamp)) <= 2.5
+                    && transcriptSimilarity(systemEntry.text, microphoneEntry.text) >= 0.65
+            }
+
+            if !isDuplicate {
+                merged.append(microphoneEntry)
+            }
+        }
+
+        return merged.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    private func isNoSpeechError(_ error: Error) -> Bool {
+        let recognitionError = error as NSError
+        let isAppleNoSpeechError = recognitionError.domain == "kAFAssistantErrorDomain"
+            && recognitionError.code == 1110
+        let descriptionSaysNoSpeech = recognitionError.localizedDescription
+            .localizedCaseInsensitiveContains("no speech")
+        return isAppleNoSpeechError || descriptionSaysNoSpeech
+    }
+
+    private func prepareAudioChunks(for url: URL) async throws -> PreparedAudioChunks {
+        let asset = AVURLAsset(url: url)
+        let duration = try await asset.load(.duration).seconds
+
+        guard duration.isFinite, duration > maximumRecognitionDuration else {
+            return PreparedAudioChunks(
+                chunks: [AudioChunk(url: url, offset: 0)],
+                temporaryDirectory: nil
+            )
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NoteTaker-Speech-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        do {
+            var chunks: [AudioChunk] = []
+            var offset: TimeInterval = 0
+            var index = 0
+
+            while offset < duration {
+                let chunkDuration = min(maximumRecognitionDuration, duration - offset)
+                let chunkURL = directory.appendingPathComponent(
+                    String(format: "chunk-%04d.m4a", index)
+                )
+                try await exportAudioChunk(
+                    asset: asset,
+                    start: offset,
+                    duration: chunkDuration,
+                    destination: chunkURL
+                )
+                chunks.append(AudioChunk(url: chunkURL, offset: offset))
+                offset += chunkDuration
+                index += 1
+            }
+
+            return PreparedAudioChunks(chunks: chunks, temporaryDirectory: directory)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+
+    private func exportAudioChunk(
+        asset: AVURLAsset,
+        start: TimeInterval,
+        duration: TimeInterval,
+        destination: URL
+    ) async throws {
+        guard let exporter = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetAppleM4A
+        ) else {
+            throw NSError(
+                domain: "NoteTaker",
+                code: 30,
+                userInfo: [NSLocalizedDescriptionKey: "Could not prepare the recording for transcription."]
+            )
+        }
+
+        exporter.outputURL = destination
+        exporter.outputFileType = .m4a
+        exporter.timeRange = CMTimeRange(
+            start: CMTime(seconds: start, preferredTimescale: 600),
+            duration: CMTime(seconds: duration, preferredTimescale: 600)
+        )
+
+        try await withCheckedThrowingContinuation { continuation in
+            exporter.exportAsynchronously {
+                switch exporter.status {
+                case .completed:
+                    continuation.resume()
+                case .failed, .cancelled:
+                    continuation.resume(
+                        throwing: exporter.error ?? NSError(
+                            domain: "NoteTaker",
+                            code: 31,
+                            userInfo: [NSLocalizedDescriptionKey: "Could not create an audio transcription chunk."]
+                        )
+                    )
+                default:
+                    continuation.resume(
+                        throwing: NSError(
+                            domain: "NoteTaker",
+                            code: 32,
+                            userInfo: [NSLocalizedDescriptionKey: "Audio transcription preparation did not finish."]
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private func transcriptSimilarity(_ left: String, _ right: String) -> Double {
+        let leftTokens = normalizedTokens(left)
+        let rightTokens = normalizedTokens(right)
+        guard !leftTokens.isEmpty, !rightTokens.isEmpty else { return 0 }
+
+        let overlap = leftTokens.intersection(rightTokens).count
+        return Double(overlap) / Double(min(leftTokens.count, rightTokens.count))
+    }
+
+    private func normalizedTokens(_ text: String) -> Set<String> {
+        Set(
+            text.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+        )
     }
 
     private func recognize(recognizer: SFSpeechRecognizer, request: SFSpeechRecognitionRequest) async throws -> SFSpeechRecognitionResult {
