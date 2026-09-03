@@ -305,21 +305,40 @@ struct ContentView: View {
 
         do {
             try await scribe.requestAuthorization()
+            var transcriptionErrors: [Error] = []
+
             recorder.status = "Transcribing microphone audio..."
-            let micEntries = try await scribe.transcribeFileAllowingSilence(
-                mic,
-                source: .microphone,
-                meetingStart: start
-            )
+            let micEntries: [ScribeEntry]
+            do {
+                micEntries = try await scribe.transcribeFileAllowingSilence(
+                    mic,
+                    source: .microphone,
+                    meetingStart: start
+                )
+            } catch {
+                micEntries = []
+                transcriptionErrors.append(error)
+            }
+
             recorder.status = "Transcribing system audio..."
-            let systemEntries = try await scribe.transcribeFileAllowingSilence(
-                system,
-                source: .systemAudio,
-                meetingStart: start
+            let systemEntries: [ScribeEntry]
+            do {
+                systemEntries = try await scribe.transcribeFileAllowingSilence(
+                    system,
+                    source: .systemAudio,
+                    meetingStart: start
+                )
+            } catch {
+                systemEntries = []
+                transcriptionErrors.append(error)
+            }
+
+            let spoken = scribe.mergeSpokenEntries(
+                microphone: micEntries,
+                systemAudio: systemEntries
             )
-            let spoken = micEntries + systemEntries
             if spoken.isEmpty && entries.isEmpty {
-                throw LocalScribeError.noSpeechDetected
+                throw transcriptionErrors.first ?? LocalScribeError.noSpeechDetected
             }
             let allEntries = (entries + spoken).sorted { $0.timestamp < $1.timestamp }
             entries = allEntries
@@ -337,7 +356,9 @@ struct ContentView: View {
             )
             report = built
             try save(report: built, entries: allEntries)
-            recorder.status = "Transcript saved — ready for ChatGPT"
+            recorder.status = transcriptionErrors.isEmpty
+                ? "Transcript saved — ready for ChatGPT"
+                : "Transcript saved from the available audio track — ready for ChatGPT"
         } catch {
             errorMessage = error.localizedDescription
         }
