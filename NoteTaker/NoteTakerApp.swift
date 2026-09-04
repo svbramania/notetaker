@@ -31,6 +31,7 @@ struct ContentView: View {
     @State private var isSynchronizingAutoRecording = false
     @State private var autoRecordingSyncPending = false
     @State private var showsCalendarSelection = false
+    @State private var calendarEmailRecipients: [MeetingEmailRecipient] = []
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
 
     private let scribe = LocalScribe()
@@ -40,13 +41,13 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 16) {
             Text("NoteTaker Scribe")
                 .font(.largeTitle.bold())
-            Text("Capture everything said, then summarize it with your ChatGPT account — no API key required")
+            Text("Capture everything said, then create meeting notes with ChatGPT handoff, OpenAI, or Claude")
                 .foregroundStyle(.secondary)
 
             GroupBox("Meeting") {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("Meeting title", text: $title)
-                    TextField("Attendees (comma-separated, if known)", text: $attendees)
+                    TextField("Attendees or email addresses (comma-separated, if known)", text: $attendees)
                 }
                 .textFieldStyle(.roundedBorder)
                 .padding(6)
@@ -58,7 +59,7 @@ struct ContentView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    Task { await toggleRecording() }
+                    Task { await toggleRecording(clearCalendarRecipients: true) }
                 } label: {
                     Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
                 }
@@ -127,6 +128,14 @@ struct ContentView: View {
                 }
                 .frame(minHeight: 300)
             }
+
+            CloudMeetingNotesView(
+                transcript: report,
+                meetingTitle: title,
+                sessionDirectory: recorder.sessionDirectory,
+                suggestedRecipients: suggestedEmailRecipients
+            )
+            .id(recorder.sessionDirectory?.path ?? "meeting-notes-configuration")
 
             HStack {
                 Button("Open Recordings Folder") { openRecordingsFolder() }
@@ -319,7 +328,13 @@ struct ContentView: View {
         }
     }
 
-    private func toggleRecording() async {
+    private var suggestedEmailRecipients: [MeetingEmailRecipient] {
+        EmailAddressExtractor.merged(
+            calendarEmailRecipients + EmailAddressExtractor.recipients(in: attendees)
+        )
+    }
+
+    private func toggleRecording(clearCalendarRecipients: Bool = false) async {
         errorMessage = nil
         do {
             if recorder.isRecording {
@@ -330,6 +345,9 @@ struct ContentView: View {
                 await recorder.stop()
                 endedAt = Date()
             } else {
+                if clearCalendarRecipients {
+                    calendarEmailRecipients = []
+                }
                 report = ""
                 entries = []
                 startedAt = Date()
@@ -382,6 +400,7 @@ struct ContentView: View {
 
         title = activeMeeting.title
         attendees = activeMeeting.attendeeNames.joined(separator: ", ")
+        calendarEmailRecipients = activeMeeting.emailRecipients
         report = ""
         entries = []
         startedAt = Date()
@@ -413,6 +432,7 @@ struct ContentView: View {
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
         title = meeting.title
         attendees = meeting.attendeeNames.joined(separator: ", ")
+        calendarEmailRecipients = meeting.emailRecipients
         calendarMonitor.dismissPrompt()
         Task { await toggleRecording() }
     }

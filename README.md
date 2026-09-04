@@ -1,6 +1,6 @@
 # NoteTaker Scribe
 
-A local-first macOS meeting scribe that captures microphone audio, system/output audio, and typed meeting chat or notes. It transcribes speech on-device with Apple's Speech framework, saves a complete timestamped transcript, and hands the transcript to the user's existing ChatGPT account for summarization.
+A local-first macOS meeting scribe that captures microphone audio, system/output audio, and typed meeting chat or notes. It transcribes speech on-device with Apple's Speech framework, saves a complete timestamped transcript, and can create structured notes through a user-provided OpenAI or Claude API key.
 
 ## MVP capabilities
 
@@ -11,12 +11,17 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Lets you paste or type relevant meeting chat and personal notes with timestamps.
 - Uses Apple's on-device Speech framework for transcription; no OpenAI API key is required.
 - Preserves everything transcribed from the meeting in timestamp order.
-- Saves `meeting-transcript.md`, `transcript.json`, `chatgpt-summary-prompt.md`, `microphone.m4a`, and `system-audio.m4a` under Application Support on your Mac.
+- Saves `meeting-transcript.md`, `meeting-notes.md`, `transcript.json`, `chatgpt-summary-prompt.md`, `microphone.m4a`, and `system-audio.m4a` under Application Support on your Mac.
 - Provides **Summarize in ChatGPT**, which copies the transcript and a structured summary prompt, then opens the ChatGPT desktop app or ChatGPT on the web.
 - Transcribes microphone and system audio sequentially and continues when either track contains speech.
 - Groups Apple Speech word segments into readable timestamped utterances using punctuation, natural pauses, and a 35-word limit.
 - Keeps **Open Recordings Folder** visible at all times.
-- Uses the user's signed-in ChatGPT account and never asks for an OpenAI API key.
+- Keeps the signed-in ChatGPT handoff available without an API key.
+- Optionally accepts an OpenAI or Claude API key and stores it in macOS Keychain with device-only, unlocked access.
+- Generates editable meeting notes with an executive summary, decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
+- Extracts attendee email addresses from calendar invitations and manually entered attendee details.
+- Provides an **Everyone** recipient checkbox plus an individual checkbox for every attendee email address.
+- Creates an addressed email draft containing the reviewed notes through the Mac's configured email application.
 - Sends content to ChatGPT only when the user pastes the prepared prompt into ChatGPT and submits it.
 - Reads upcoming events from calendars already synchronized with macOS Calendar.
 - Discovers calendars across multiple Gmail, Outlook, Exchange, iCloud, CalDAV, and local accounts connected to the Mac.
@@ -62,8 +67,10 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 9. Click **Stop Meeting** for a manual recording; an automatic recording stops at the calendar event's end time.
 10. Click **Build Transcript**.
 11. Review the complete local transcript.
-12. Click **Summarize in ChatGPT**. The app copies the transcript and summary instructions and opens ChatGPT.
-13. Paste into ChatGPT with **Command-V**, then send.
+12. Use **Summarize in ChatGPT** for the existing no-key handoff, or choose OpenAI/Claude and save an API key in macOS Keychain.
+13. Select **Generate Meeting Notes** to create and save an editable `meeting-notes.md` file.
+14. Select **Everyone** or individual attendee email checkboxes, then choose **Prepare Email**.
+15. Review the addressed draft in the configured Mac email application and send it.
 
 ## ChatGPT summary output
 
@@ -78,7 +85,7 @@ Open questions, risks, and dependencies
 Attendees and meeting details
 ```
 
-The full local transcript remains the source of truth. ChatGPT is asked to use only transcript-supported information and to mark missing owners and dates as “Not stated.” ChatGPT subscriptions and OpenAI API billing are separate, so this app uses a user-controlled ChatGPT handoff rather than making API calls in the background.
+The full local transcript remains the source of truth. Both the ChatGPT handoff and API-generated workflow instruct the selected model to use only transcript-supported information and mark missing owners and dates as “Not stated.” ChatGPT subscriptions, OpenAI API usage, and Claude API usage have separate billing arrangements.
 
 ## Current MVP limitations
 
@@ -86,7 +93,8 @@ The full local transcript remains the source of truth. ChatGPT is asked to use o
 - Apple Speech availability and on-device language support vary by macOS version and locale.
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
-- ChatGPT summarization requires the user to paste and send the prepared prompt. This keeps the workflow within the user's ChatGPT account without storing account credentials or requiring an API key.
+- The ChatGPT handoff requires the user to paste and send the prepared prompt. The optional OpenAI and Claude integrations send the transcript directly after the user selects **Generate Meeting Notes**.
+- **Prepare Email** opens an addressed draft for review and sending through the configured Mac email application.
 - Calendar detection uses every selected calendar available through macOS Calendar, including multiple Google and Microsoft accounts.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
 - Calendar auto-recording works while NoteTaker is running. It does not launch a closed application at an event's start time.

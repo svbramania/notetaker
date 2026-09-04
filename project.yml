@@ -18,7 +18,7 @@ targets:
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: 0.7.0
+        MARKETING_VERSION: 0.8.0
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_CFBundleDisplayName: NoteTaker
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity

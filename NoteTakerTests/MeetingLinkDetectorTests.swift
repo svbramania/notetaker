@@ -83,7 +83,8 @@ final class CalendarMeetingTimelineTests: XCTestCase {
             endDate: now.addingTimeInterval(endOffset),
             provider: .zoom,
             meetingURL: nil,
-            attendeeNames: []
+            attendeeNames: [],
+            emailRecipients: []
         )
     }
 }
@@ -148,6 +149,47 @@ final class RecordingFolderNamerTests: XCTestCase {
 
     func testUsesMeetingForBlankTitle() {
         XCTAssertEqual(RecordingFolderNamer.sanitizedTitle("  / :  "), "Meeting")
+    }
+}
+
+final class MeetingNotesServiceTests: XCTestCase {
+    func testExtractsAndDeduplicatesEmailAddresses() {
+        XCTAssertEqual(
+            EmailAddressExtractor.addresses(
+                in: "mailto:Person%40Example.com, person@example.com, second@example.org"
+            ),
+            ["person@example.com", "second@example.org"]
+        )
+    }
+
+    func testParsesOpenAIResponseText() throws {
+        let data = Data(
+            ##"{"output":[{"content":[{"type":"output_text","text":"# Meeting Notes\nSummary"}]}]}"##.utf8
+        )
+
+        XCTAssertEqual(
+            try MeetingNotesService.parseOpenAIResponse(data),
+            "# Meeting Notes\nSummary"
+        )
+    }
+
+    func testParsesClaudeResponseText() throws {
+        let data = Data(
+            ##"{"content":[{"type":"text","text":"# Meeting Notes\nSummary"}]}"##.utf8
+        )
+
+        XCTAssertEqual(
+            try MeetingNotesService.parseClaudeResponse(data),
+            "# Meeting Notes\nSummary"
+        )
+    }
+
+    func testMeetingNotesPromptIncludesRequiredSections() {
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Executive Summary"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Decisions Made"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Action Items"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Owner"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Due Date"))
     }
 }
 
