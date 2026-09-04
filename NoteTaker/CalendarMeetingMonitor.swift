@@ -453,7 +453,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             emailParticipants.flatMap { participant in
                 let name = participant.name?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return EmailAddressExtractor.addresses(
-                    in: participant.url?.absoluteString ?? ""
+                    in: participant.url.absoluteString
                 ).map { email in
                     MeetingEmailRecipient(
                         name: name.flatMap { $0.isEmpty ? nil : $0 } ?? email,
