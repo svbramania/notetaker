@@ -164,7 +164,7 @@ final class MeetingNotesServiceTests: XCTestCase {
 
     func testParsesOpenAIResponseText() throws {
         let data = Data(
-            #"{"output":[{"content":[{"type":"output_text","text":"# Meeting Notes\nSummary"}]}]}"#.utf8
+            ##"{"output":[{"content":[{"type":"output_text","text":"# Meeting Notes\nSummary"}]}]}"##.utf8
         )
 
         XCTAssertEqual(
@@ -175,7 +175,7 @@ final class MeetingNotesServiceTests: XCTestCase {
 
     func testParsesClaudeResponseText() throws {
         let data = Data(
-            #"{"content":[{"type":"text","text":"# Meeting Notes\nSummary"}]}"#.utf8
+            ##"{"content":[{"type":"text","text":"# Meeting Notes\nSummary"}]}"##.utf8
         )
 
         XCTAssertEqual(
