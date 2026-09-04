@@ -237,11 +237,24 @@ struct ContentView: View {
 
                 Text(
                     autoRecordCalendarMeetings
-                        ? "NoteTaker will start at each supported calendar event's start time and stop at its end time. Keep NoteTaker running and confirm participants have consented to recording."
+                        ? "NoteTaker starts and stops automatically for invitations containing a Teams, Zoom, or Google Meet link. Keep NoteTaker running and confirm participants have consented to recording."
                         : "Turn this on to start and stop recording automatically from Teams, Zoom, and Google Meet calendar times."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                Toggle(
+                    "Also auto-record meeting invitations without a Teams, Zoom, or Google Meet link",
+                    isOn: Binding(
+                        get: { calendarMonitor.includeInvitesWithoutLinks },
+                        set: { calendarMonitor.setIncludeInvitesWithoutLinks($0) }
+                    )
+                )
+                .disabled(!calendarMonitor.calendarAccessGranted || !autoRecordCalendarMeetings)
+
+                Text("This optional setting applies to timed calendar invitations with attendees; personal calendar blocks remain excluded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 if calendarMonitor.calendarAccessGranted {
                     HStack {
@@ -293,7 +306,11 @@ struct ContentView: View {
                         if let meeting = calendarMonitor.nextMeeting {
                             Text("Next: \(meeting.title) at \(meetingTime(meeting.startDate)) on \(meeting.provider.rawValue)")
                         } else {
-                            Text("Watching Calendar for Teams, Zoom, and Google Meet links")
+                            Text(
+                                calendarMonitor.includeInvitesWithoutLinks
+                                    ? "Watching for video links and attendee-based meeting invitations"
+                                    : "Watching Calendar for Teams, Zoom, and Google Meet links"
+                            )
                         }
                         Spacer()
                         if calendarMonitor.notificationAccessGranted {
