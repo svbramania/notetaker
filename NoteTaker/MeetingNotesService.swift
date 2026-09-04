@@ -259,10 +259,16 @@ struct MeetingNotesService {
 
     static func parseOpenAIResponse(_ data: Data) throws -> String {
         let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-        let text = response.output
-            .flatMap { $0.content ?? [] }
-            .filter { $0.type == nil || $0.type == "output_text" }
-            .compactMap(\.text)
+        var textParts: [String] = []
+        for output in response.output {
+            for content in output.content ?? [] {
+                if (content.type == nil || content.type == "output_text"),
+                   let text = content.text {
+                    textParts.append(text)
+                }
+            }
+        }
+        let text = textParts
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw MeetingNotesServiceError.invalidResponse }
@@ -271,9 +277,13 @@ struct MeetingNotesService {
 
     static func parseClaudeResponse(_ data: Data) throws -> String {
         let response = try JSONDecoder().decode(ClaudeResponse.self, from: data)
-        let text = response.content
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
+        var textParts: [String] = []
+        for content in response.content where content.type == "text" {
+            if let text = content.text {
+                textParts.append(text)
+            }
+        }
+        let text = textParts
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw MeetingNotesServiceError.invalidResponse }
