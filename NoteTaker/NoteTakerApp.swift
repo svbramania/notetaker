@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var skippedAutoMeetingIDs: Set<String> = []
     @State private var isSynchronizingAutoRecording = false
     @State private var autoRecordingSyncPending = false
+    @State private var showsCalendarSelection = false
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
 
     private let scribe = LocalScribe()
@@ -153,6 +154,9 @@ struct ContentView: View {
                 await synchronizeCalendarRecording()
             }
         }
+        .sheet(isPresented: $showsCalendarSelection) {
+            CalendarSelectionView(calendarMonitor: calendarMonitor)
+        }
     }
 
     @ViewBuilder
@@ -229,6 +233,22 @@ struct ContentView: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if calendarMonitor.calendarAccessGranted {
+                    HStack {
+                        Text(
+                            "Monitoring \(calendarMonitor.includedCalendarCount) of \(calendarMonitor.availableCalendars.count) calendars across \(calendarMonitor.calendarAccounts.count) accounts"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button("Choose Calendars") {
+                            showsCalendarSelection = true
+                        }
+                    }
+                }
 
                 Divider()
 
@@ -518,5 +538,79 @@ struct ContentView: View {
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+}
+
+struct CalendarSelectionView: View {
+    @ObservedObject var calendarMonitor: CalendarMeetingMonitor
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Choose Calendars")
+                        .font(.title2.bold())
+                    Text("Select calendars from every Gmail, Outlook, Exchange, and iCloud account connected to this Mac.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+
+            HStack {
+                Button("Select All") {
+                    calendarMonitor.selectAllCalendars()
+                }
+                Button("Clear Selection") {
+                    calendarMonitor.clearCalendarSelection()
+                }
+                Spacer()
+                Text("\(calendarMonitor.includedCalendarCount) selected")
+                    .foregroundStyle(.secondary)
+            }
+
+            if calendarMonitor.calendarAccounts.isEmpty {
+                ContentUnavailableView(
+                    "No Calendars Found",
+                    systemImage: "calendar.badge.exclamationmark",
+                    description: Text("Add Gmail or Outlook accounts in macOS System Settings under Internet Accounts, then return to NoteTaker.")
+                )
+            } else {
+                List {
+                    ForEach(calendarMonitor.calendarAccounts) { account in
+                        Section {
+                            ForEach(account.calendars) { calendar in
+                                Toggle(
+                                    isOn: Binding(
+                                        get: { calendarMonitor.isCalendarIncluded(calendar.id) },
+                                        set: { calendarMonitor.setCalendarIncluded(calendar.id, included: $0) }
+                                    )
+                                ) {
+                                    Text(calendar.title)
+                                }
+                            }
+                        } header: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(account.name)
+                                Text(account.providerName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.inset)
+            }
+
+            Text("New calendars and newly connected accounts are included automatically. Calendar choices are saved on this Mac.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(minWidth: 620, minHeight: 520)
     }
 }
