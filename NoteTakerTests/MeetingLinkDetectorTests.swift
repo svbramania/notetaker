@@ -1,3 +1,4 @@
+import EventKit
 import XCTest
 @testable import NoteTaker
 
@@ -83,6 +84,47 @@ final class CalendarMeetingTimelineTests: XCTestCase {
             provider: .zoom,
             meetingURL: nil,
             attendeeNames: []
+        )
+    }
+}
+
+final class CalendarSelectionPolicyTests: XCTestCase {
+    func testIncludesEveryCalendarByDefault() {
+        let available: Set<String> = ["gmail-personal", "gmail-work", "outlook-client"]
+
+        XCTAssertEqual(
+            CalendarSelectionPolicy.includedIdentifiers(available: available, excluded: []),
+            available
+        )
+    }
+
+    func testExcludesOnlyCalendarsTheUserTurnsOff() {
+        XCTAssertEqual(
+            CalendarSelectionPolicy.includedIdentifiers(
+                available: ["gmail-personal", "gmail-work", "outlook-client"],
+                excluded: ["gmail-personal"]
+            ),
+            ["gmail-work", "outlook-client"]
+        )
+    }
+
+    func testNewCalendarsAreAutomaticallyIncluded() {
+        let included = CalendarSelectionPolicy.includedIdentifiers(
+            available: ["existing", "new-calendar"],
+            excluded: ["existing"]
+        )
+
+        XCTAssertEqual(included, ["new-calendar"])
+    }
+
+    func testRecognizesGoogleAndMicrosoftAccountLabels() {
+        XCTAssertEqual(
+            CalendarAccountProvider.name(sourceTitle: "suraj@gmail.com", sourceType: .calDAV),
+            "Google"
+        )
+        XCTAssertEqual(
+            CalendarAccountProvider.name(sourceTitle: "Work", sourceType: .exchange),
+            "Microsoft Exchange"
         )
     }
 }
