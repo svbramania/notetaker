@@ -18,7 +18,7 @@ targets:
         SWIFT_VERSION: 5.0
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
-        MARKETING_VERSION: 0.6.1
+        MARKETING_VERSION: 0.7.0
         CURRENT_PROJECT_VERSION: 1
         INFOPLIST_KEY_CFBundleDisplayName: NoteTaker
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
@@ -26,7 +26,7 @@ targets:
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: NoteTaker transcribes recorded meeting audio locally on this Mac.
         INFOPLIST_KEY_NSScreenCaptureUsageDescription: NoteTaker captures screen and system audio from calls and meetings.
         INFOPLIST_KEY_NSAudioCaptureUsageDescription: NoteTaker captures system audio from calls and meetings to include spoken content in the local meeting scribe.
-        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: NoteTaker reads upcoming calendar events to recognize Teams, Zoom, and Google Meet calls and remind you before they begin.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: NoteTaker reads selected calendars across your connected accounts to recognize Teams, Zoom, and Google Meet calls and manage recording times.
   NoteTakerTests:
     type: bundle.unit-test
     platform: macOS
