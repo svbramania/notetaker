@@ -31,6 +31,61 @@ struct UpcomingVideoMeeting: Identifiable, Equatable {
     let attendeeNames: [String]
 }
 
+struct AvailableMeetingCalendar: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let accountIdentifier: String
+    let accountName: String
+    let providerName: String
+}
+
+struct MeetingCalendarAccount: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let providerName: String
+    let calendars: [AvailableMeetingCalendar]
+}
+
+enum CalendarSelectionPolicy {
+    static func includedIdentifiers(
+        available: Set<String>,
+        excluded: Set<String>
+    ) -> Set<String> {
+        available.subtracting(excluded)
+    }
+}
+
+enum CalendarAccountProvider {
+    static func name(sourceTitle: String, sourceType: EKSourceType) -> String {
+        let normalized = sourceTitle.lowercased()
+        if normalized.contains("google") || normalized.contains("gmail") {
+            return "Google"
+        }
+        if normalized.contains("outlook")
+            || normalized.contains("office 365")
+            || normalized.contains("microsoft") {
+            return "Microsoft"
+        }
+
+        switch sourceType {
+        case .exchange:
+            return "Microsoft Exchange"
+        case .mobileMe:
+            return "iCloud"
+        case .calDAV:
+            return "CalDAV"
+        case .local:
+            return "On My Mac"
+        case .subscribed:
+            return "Subscribed"
+        case .birthdays:
+            return "Birthdays"
+        @unknown default:
+            return "Calendar"
+        }
+    }
+}
+
 enum CalendarMeetingTimeline {
     static func activeMeeting(
         in meetings: [UpcomingVideoMeeting],
@@ -120,6 +175,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     @Published private(set) var nextMeeting: UpcomingVideoMeeting?
     @Published private(set) var activeMeeting: UpcomingVideoMeeting?
     @Published private(set) var meetingToPrompt: UpcomingVideoMeeting?
+    @Published private(set) var availableCalendars: [AvailableMeetingCalendar] = []
     @Published private(set) var status = "Calendar alerts are not enabled"
 
     static let notificationLeadTime: TimeInterval = 5 * 60
@@ -129,6 +185,38 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var dismissedPromptIDs: Set<String> = []
     private var nextCalendarBoundary: Date?
+    private var excludedCalendarIdentifiers = Set(
+        UserDefaults.standard.stringArray(forKey: "excludedMeetingCalendarIdentifiers") ?? []
+    )
+
+    var calendarAccounts: [MeetingCalendarAccount] {
+        Dictionary(grouping: availableCalendars, by: \.accountIdentifier)
+            .map { identifier, calendars in
+                MeetingCalendarAccount(
+                    id: identifier,
+                    name: calendars.first?.accountName ?? "Calendar Account",
+                    providerName: calendars.first?.providerName ?? "Calendar",
+                    calendars: calendars.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                )
+            }
+            .sorted {
+                let providerComparison = $0.providerName.localizedCaseInsensitiveCompare($1.providerName)
+                return providerComparison == .orderedSame
+                    ? $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                    : providerComparison == .orderedAscending
+            }
+    }
+
+    var includedCalendarCount: Int {
+        includedCalendarIdentifiers.count
+    }
+
+    private var includedCalendarIdentifiers: Set<String> {
+        CalendarSelectionPolicy.includedIdentifiers(
+            available: Set(availableCalendars.map(\.id)),
+            excluded: excludedCalendarIdentifiers
+        )
+    }
 
     override init() {
         super.init()
@@ -188,11 +276,13 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             nextMeeting = nil
             activeMeeting = nil
             meetingToPrompt = nil
+            availableCalendars = []
             nextCalendarBoundary = nil
             status = "Enable Calendar access to detect video meetings"
             return
         }
 
+        refreshAvailableCalendars()
         let now = Date()
         let meetings = videoMeetings(
             from: now.addingTimeInterval(-(24 * 60 * 60)),
@@ -212,13 +302,17 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
 
         if notificationAccessGranted {
             await scheduleNotifications(for: meetings, now: now)
-            status = activeMeeting != nil
+            status = includedCalendarCount == 0
+                ? "Choose one or more calendars to monitor"
+                : activeMeeting != nil
                 ? "Calendar meeting in progress"
                 : meetings.isEmpty
-                ? "Watching Calendar for Teams, Zoom, and Google Meet"
+                ? "Watching \(includedCalendarCount) calendars for Teams, Zoom, and Google Meet"
                 : "Meeting alert scheduled"
         } else {
-            status = "Calendar connected — enable notifications for meeting alerts"
+            status = includedCalendarCount == 0
+                ? "Choose one or more calendars to monitor"
+                : "Calendar connected — enable notifications for meeting alerts"
         }
     }
 
@@ -229,9 +323,59 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         meetingToPrompt = nil
     }
 
+    func isCalendarIncluded(_ identifier: String) -> Bool {
+        !excludedCalendarIdentifiers.contains(identifier)
+    }
+
+    func setCalendarIncluded(_ identifier: String, included: Bool) {
+        if included {
+            excludedCalendarIdentifiers.remove(identifier)
+        } else {
+            excludedCalendarIdentifiers.insert(identifier)
+        }
+        saveCalendarSelection()
+        Task { await refresh() }
+    }
+
+    func selectAllCalendars() {
+        excludedCalendarIdentifiers.subtract(availableCalendars.map(\.id))
+        saveCalendarSelection()
+        Task { await refresh() }
+    }
+
+    func clearCalendarSelection() {
+        excludedCalendarIdentifiers.formUnion(availableCalendars.map(\.id))
+        saveCalendarSelection()
+        Task { await refresh() }
+    }
+
     private func refreshDelay(after date: Date) -> TimeInterval {
         guard let nextCalendarBoundary else { return 60 }
         return min(60, max(0.25, nextCalendarBoundary.timeIntervalSince(date) + 0.1))
+    }
+
+    private func refreshAvailableCalendars() {
+        availableCalendars = eventStore.calendars(for: .event)
+            .map { calendar in
+                let source = calendar.source
+                return AvailableMeetingCalendar(
+                    id: calendar.calendarIdentifier,
+                    title: calendar.title,
+                    accountIdentifier: source.sourceIdentifier,
+                    accountName: source.title,
+                    providerName: CalendarAccountProvider.name(
+                        sourceTitle: source.title,
+                        sourceType: source.sourceType
+                    )
+                )
+            }
+    }
+
+    private func saveCalendarSelection() {
+        UserDefaults.standard.set(
+            Array(excludedCalendarIdentifiers).sorted(),
+            forKey: "excludedMeetingCalendarIdentifiers"
+        )
     }
 
     private func requestCalendarAccess() async throws -> Bool {
@@ -271,7 +415,17 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     }
 
     private func videoMeetings(from start: Date, through end: Date) -> [UpcomingVideoMeeting] {
-        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let includedIdentifiers = includedCalendarIdentifiers
+        let calendars = eventStore.calendars(for: .event).filter {
+            includedIdentifiers.contains($0.calendarIdentifier)
+        }
+        guard !calendars.isEmpty else { return [] }
+
+        let predicate = eventStore.predicateForEvents(
+            withStart: start,
+            end: end,
+            calendars: calendars
+        )
 
         return eventStore.events(matching: predicate)
             .compactMap(makeUpcomingMeeting)
