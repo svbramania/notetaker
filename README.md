@@ -17,7 +17,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Groups Apple Speech word segments into readable timestamped utterances using punctuation, natural pauses, and a 35-word limit.
 - Keeps **Open Recordings Folder** visible at all times.
 - Keeps the signed-in ChatGPT handoff available without an API key.
-- Optionally accepts an OpenAI or Claude API key and stores it in macOS Keychain with device-only, unlocked access.
+- Accepts multiple OpenAI and Claude API keys, stores each independently in macOS Keychain with device-only unlocked access, and lets the user arrange their attempt order.
+- Provides an opt-in fallback that tries the next configured provider only when the current provider reports an exhausted credit, quota, usage, or spend limit.
 - Generates editable meeting notes with an executive summary, decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
 - Extracts attendee email addresses from calendar invitations and manually entered attendee details.
 - Provides an **Everyone** recipient checkbox plus an individual checkbox for every attendee email address.
@@ -26,7 +27,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Reads upcoming events from calendars already synchronized with macOS Calendar.
 - Discovers calendars across multiple Gmail, Outlook, Exchange, iCloud, CalDAV, and local accounts connected to the Mac.
 - Provides **Choose Calendars** controls grouped by account, with Select All, Clear Selection, saved exclusions, and automatic inclusion of newly added calendars.
-- Recognizes Microsoft Teams, Google Meet, and Zoom links in event URLs, locations, and notes.
+- Auto-records only invitations containing recognized Microsoft Teams, Google Meet, or Zoom links by default.
+- Provides an optional checkbox for attendee-based meeting invitations without a recognized video link while continuing to exclude personal calendar blocks.
 - Schedules a local **Meeting starts soon—record?** notification five minutes before a recognized call.
 - Displays the upcoming meeting in NoteTaker and fills its title and attendee names when recording begins.
 - Provides a saved **Auto-record calendar meetings** switch that starts recording at a supported calendar event's start time and stops at its end time.
@@ -60,15 +62,15 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 2. Choose **Enable Calendar Alerts** to detect upcoming Teams, Meet, and Zoom meetings across those calendars.
 3. Allow Calendar and Notification access when macOS asks, then use **Choose Calendars** to review or refine which calendars NoteTaker monitors.
 4. Choose **Allow Access to Mic and Speakers**, then approve Microphone and Screen & System Audio Recording access.
-5. **Auto-record calendar meetings** is on by default. Keep NoteTaker running; recognized meetings will record from their calendar start time through their end time. Use the switch to turn this automation off whenever preferred.
+5. **Auto-record calendar meetings** is on by default and applies to invitations containing Teams, Meet, or Zoom links. Use the separate checkbox to include attendee-based meeting invitations without links.
 6. Enter the meeting title and attendees manually, wait for a detected meeting prompt, or use calendar auto-recording.
 7. Click **Record Meeting** for a manual recording. From an upcoming-meeting prompt or automatic recording, the title and available attendee names are filled automatically.
 8. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
 9. Click **Stop Meeting** for a manual recording; an automatic recording stops at the calendar event's end time.
 10. Click **Build Transcript**.
 11. Review the complete local transcript.
-12. Use **Summarize in ChatGPT** for the existing no-key handoff, or choose OpenAI/Claude and save an API key in macOS Keychain.
-13. Select **Generate Meeting Notes** to create and save an editable `meeting-notes.md` file.
+12. Use **Summarize in ChatGPT** for the existing no-key handoff, or add one or more OpenAI/Claude API keys and arrange their numbered attempt order.
+13. Optionally enable automatic provider fallback for exhausted usage, credit, quota, or spend limits, then select **Generate Meeting Notes**.
 14. Select **Everyone** or individual attendee email checkboxes, then choose **Prepare Email**.
 15. Review the addressed draft in the configured Mac email application and send it.
 
@@ -96,6 +98,7 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 - The ChatGPT handoff requires the user to paste and send the prepared prompt. The optional OpenAI and Claude integrations send the transcript directly after the user selects **Generate Meeting Notes**.
 - **Prepare Email** opens an addressed draft for review and sending through the configured Mac email application.
 - Calendar detection uses every selected calendar available through macOS Calendar, including multiple Google and Microsoft accounts.
+- Link-only calendar eligibility is the default. The optional no-link setting covers timed invitations with attendees.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
 - Calendar auto-recording works while NoteTaker is running. It does not launch a closed application at an event's start time.
 

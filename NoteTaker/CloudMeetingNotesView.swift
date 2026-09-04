@@ -7,35 +7,19 @@ struct CloudMeetingNotesView: View {
     let sessionDirectory: URL?
     let suggestedRecipients: [MeetingEmailRecipient]
 
-    @AppStorage("meetingNotesProvider") private var providerRawValue = MeetingNotesProvider.openAI.rawValue
-    @AppStorage("openAIMeetingNotesModel") private var openAIModel = MeetingNotesProvider.openAI.defaultModel
-    @AppStorage("claudeMeetingNotesModel") private var claudeModel = MeetingNotesProvider.claude.defaultModel
-    @State private var apiKeyEntry = ""
-    @State private var hasSavedAPIKey = false
+    @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
+    @State private var configurations: [APIProviderConfiguration] = []
+    @State private var newProvider: MeetingNotesProvider = .openAI
+    @State private var newLabel = ""
+    @State private var newModel = MeetingNotesProvider.openAI.defaultModel
+    @State private var newAPIKey = ""
     @State private var generatedNotes = ""
     @State private var recipients: [MeetingEmailRecipient] = []
     @State private var selectedRecipientIDs: Set<String> = []
     @State private var isGenerating = false
-    @State private var status = "Choose a provider and save its API key in macOS Keychain."
+    @State private var status = "Add one or more API providers in the order they should be used."
 
     private let notesService = MeetingNotesService()
-
-    private var provider: MeetingNotesProvider {
-        MeetingNotesProvider(rawValue: providerRawValue) ?? .openAI
-    }
-
-    private var modelBinding: Binding<String> {
-        Binding(
-            get: { provider == .openAI ? openAIModel : claudeModel },
-            set: {
-                if provider == .openAI {
-                    openAIModel = $0
-                } else {
-                    claudeModel = $0
-                }
-            }
-        )
-    }
 
     private var everyoneBinding: Binding<Bool> {
         Binding(
@@ -58,31 +42,55 @@ struct CloudMeetingNotesView: View {
     var body: some View {
         GroupBox("AI meeting notes and email") {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .bottom, spacing: 10) {
-                    Picker("Provider", selection: $providerRawValue) {
+                Text("API provider order")
+                    .font(.headline)
+
+                HStack(alignment: .bottom, spacing: 8) {
+                    Picker("Provider", selection: $newProvider) {
                         ForEach(MeetingNotesProvider.allCases) { provider in
-                            Text(provider.rawValue).tag(provider.rawValue)
+                            Text(provider.rawValue).tag(provider)
                         }
                     }
-                    .frame(width: 180)
+                    .frame(width: 165)
 
-                    TextField("Model", text: modelBinding)
+                    TextField("Label, such as Work key", text: $newLabel)
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField(provider.keyPlaceholder, text: $apiKeyEntry)
+                    TextField("Model", text: $newModel)
                         .textFieldStyle(.roundedBorder)
 
-                    Button("Save API Key") { saveAPIKey() }
-                        .disabled(apiKeyEntry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    SecureField(newProvider.keyPlaceholder, text: $newAPIKey)
+                        .textFieldStyle(.roundedBorder)
 
-                    if hasSavedAPIKey {
-                        Button("Remove Key") { removeAPIKey() }
+                    Button("Add API Key") { addConfiguration() }
+                        .disabled(newAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if configurations.isEmpty {
+                    Text("No API keys configured. The no-key ChatGPT handoff remains available above.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(Array(configurations.enumerated()), id: \.element.id) { index, configuration in
+                            providerRow(configuration, at: index)
+                        }
                     }
                 }
 
+                Toggle(
+                    "Automatically try the next API provider when a usage, credit, or spend limit is reached",
+                    isOn: $autoFallbackOnQuotaLimit
+                )
+                .disabled(configurations.count < 2)
+
+                Text("Keys are stored separately in macOS Keychain. The numbered list controls the attempt order. Other errors stop processing so configuration and service issues remain visible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 HStack(spacing: 8) {
-                    Image(systemName: hasSavedAPIKey ? "key.fill" : "key")
-                        .foregroundStyle(hasSavedAPIKey ? Color.green : Color.secondary)
+                    Image(systemName: configurations.isEmpty ? "key" : "key.fill")
+                        .foregroundStyle(configurations.isEmpty ? Color.secondary : Color.green)
                     Text(status)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -91,13 +99,17 @@ struct CloudMeetingNotesView: View {
                         Task { await generateNotes() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(transcript.isEmpty || !hasSavedAPIKey || isGenerating)
+                    .disabled(
+                        transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || configurations.isEmpty
+                            || isGenerating
+                    )
                     if isGenerating {
                         ProgressView().controlSize(.small)
                     }
                 }
 
-                Text("Generating notes sends the transcript to the selected provider. The API key stays in macOS Keychain, and the completed notes are saved locally with the recording.")
+                Text("Generating notes sends the transcript to the provider being attempted. Completed notes are saved locally with the recording.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -160,10 +172,9 @@ struct CloudMeetingNotesView: View {
             }
             .padding(6)
         }
-        .task { refreshSavedKeyStatus() }
-        .onChange(of: providerRawValue) { _, _ in
-            apiKeyEntry = ""
-            refreshSavedKeyStatus()
+        .task { loadConfigurationsAndMigrateLegacyKeys() }
+        .onChange(of: newProvider) { _, provider in
+            newModel = provider.defaultModel
         }
         .onChange(of: suggestedRecipients, initial: true) { _, updatedRecipients in
             recipients = EmailAddressExtractor.merged(updatedRecipients)
@@ -171,60 +182,162 @@ struct CloudMeetingNotesView: View {
         }
     }
 
-    private func saveAPIKey() {
+    @ViewBuilder
+    private func providerRow(_ configuration: APIProviderConfiguration, at index: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("\(index + 1)")
+                .font(.headline.monospacedDigit())
+                .frame(width: 24)
+            Text(configuration.provider.rawValue)
+                .frame(width: 75, alignment: .leading)
+            TextField("Label", text: configurationBinding(configuration.id, keyPath: \.label))
+                .textFieldStyle(.roundedBorder)
+            TextField("Model", text: configurationBinding(configuration.id, keyPath: \.model))
+                .textFieldStyle(.roundedBorder)
+            Button { moveConfiguration(from: index, to: index - 1) } label: {
+                Image(systemName: "arrow.up")
+            }
+            .help("Move earlier")
+            .disabled(index == 0)
+            Button { moveConfiguration(from: index, to: index + 1) } label: {
+                Image(systemName: "arrow.down")
+            }
+            .help("Move later")
+            .disabled(index == configurations.count - 1)
+            Button(role: .destructive) { removeConfiguration(configuration) } label: {
+                Image(systemName: "trash")
+            }
+            .help("Remove API key")
+        }
+    }
+
+    private func configurationBinding(
+        _ id: UUID,
+        keyPath: WritableKeyPath<APIProviderConfiguration, String>
+    ) -> Binding<String> {
+        Binding(
+            get: { configurations.first(where: { $0.id == id })?[keyPath: keyPath] ?? "" },
+            set: { value in
+                guard let index = configurations.firstIndex(where: { $0.id == id }) else { return }
+                configurations[index][keyPath: keyPath] = value
+                persistConfigurations()
+            }
+        )
+    }
+
+    private func addConfiguration() {
+        let label = newLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = newModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let configuration = APIProviderConfiguration(
+            provider: newProvider,
+            label: label.isEmpty ? "\(newProvider.rawValue) key \(configurations.count + 1)" : label,
+            model: model.isEmpty ? newProvider.defaultModel : model
+        )
         do {
-            try APIKeyStore.save(apiKeyEntry, for: provider)
-            apiKeyEntry = ""
-            hasSavedAPIKey = true
-            status = "\(provider.rawValue) API key saved securely in macOS Keychain."
+            try APIKeyStore.save(newAPIKey, identifier: configuration.id.uuidString)
+            configurations.append(configuration)
+            persistConfigurations()
+            newAPIKey = ""
+            newLabel = ""
+            status = "\(configuration.label) added as provider \(configurations.count)."
         } catch {
             status = error.localizedDescription
         }
     }
 
-    private func removeAPIKey() {
+    private func removeConfiguration(_ configuration: APIProviderConfiguration) {
         do {
-            try APIKeyStore.delete(for: provider)
-            apiKeyEntry = ""
-            hasSavedAPIKey = false
-            status = "\(provider.rawValue) API key removed from macOS Keychain."
+            try APIKeyStore.delete(identifier: configuration.id.uuidString)
+            configurations.removeAll { $0.id == configuration.id }
+            persistConfigurations()
+            status = "\(configuration.label) removed from macOS Keychain."
         } catch {
             status = error.localizedDescription
         }
     }
 
-    private func refreshSavedKeyStatus() {
-        do {
-            hasSavedAPIKey = try APIKeyStore.load(for: provider) != nil
-            status = hasSavedAPIKey
-                ? "\(provider.rawValue) API key is ready in macOS Keychain."
-                : "Enter and save a \(provider.rawValue) API key."
-        } catch {
-            hasSavedAPIKey = false
-            status = error.localizedDescription
+    private func moveConfiguration(from source: Int, to destination: Int) {
+        guard configurations.indices.contains(source),
+              configurations.indices.contains(destination) else { return }
+        let configuration = configurations.remove(at: source)
+        configurations.insert(configuration, at: destination)
+        persistConfigurations()
+        status = "API provider order updated."
+    }
+
+    private func persistConfigurations() {
+        APIProviderConfigurationStore.save(configurations)
+    }
+
+    private func loadConfigurationsAndMigrateLegacyKeys() {
+        configurations = APIProviderConfigurationStore.load()
+        guard configurations.isEmpty else {
+            status = "\(configurations.count) API provider configuration(s) ready."
+            return
         }
+
+        var migrated: [APIProviderConfiguration] = []
+        for provider in MeetingNotesProvider.allCases {
+            let legacyKey: String?
+            do {
+                legacyKey = try APIKeyStore.load(for: provider)
+            } catch {
+                continue
+            }
+            guard let key = legacyKey else { continue }
+            let configuration = APIProviderConfiguration(
+                provider: provider,
+                label: "\(provider.rawValue) key",
+                model: provider.defaultModel
+            )
+            do {
+                try APIKeyStore.save(key, identifier: configuration.id.uuidString)
+                migrated.append(configuration)
+            } catch {
+                status = error.localizedDescription
+                return
+            }
+        }
+
+        configurations = migrated
+        persistConfigurations()
+        status = migrated.isEmpty
+            ? "Add one or more API providers in the order they should be used."
+            : "Existing API keys migrated into the ordered provider list."
     }
 
     private func generateNotes() async {
         isGenerating = true
-        status = "Generating structured notes with \(provider.rawValue)..."
         defer { isGenerating = false }
 
-        do {
-            guard let key = try APIKeyStore.load(for: provider) else {
-                throw MeetingNotesServiceError.missingAPIKey
+        for (index, configuration) in configurations.enumerated() {
+            do {
+                guard let key = try APIKeyStore.load(identifier: configuration.id.uuidString) else {
+                    throw MeetingNotesServiceError.missingAPIKey
+                }
+                status = "Trying \(index + 1) of \(configurations.count): \(configuration.label)..."
+                generatedNotes = try await notesService.generate(
+                    transcript: transcript,
+                    provider: configuration.provider,
+                    model: configuration.model,
+                    apiKey: key
+                )
+                try writeGeneratedNotes()
+                status = "Meeting notes generated with \(configuration.label) and saved locally."
+                return
+            } catch {
+                let shouldContinue = APIFallbackPolicy.shouldTryNext(
+                    after: error,
+                    automaticFallbackEnabled: autoFallbackOnQuotaLimit,
+                    hasNextProvider: index < configurations.count - 1
+                )
+                if shouldContinue {
+                    status = "\(configuration.label) reached its limit. Trying the next provider..."
+                    continue
+                }
+                status = error.localizedDescription
+                return
             }
-            let model = modelBinding.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            generatedNotes = try await notesService.generate(
-                transcript: transcript,
-                provider: provider,
-                model: model.isEmpty ? provider.defaultModel : model,
-                apiKey: key
-            )
-            try writeGeneratedNotes()
-            status = "Meeting notes generated and saved locally."
-        } catch {
-            status = error.localizedDescription
         }
     }
 
@@ -252,9 +365,7 @@ struct CloudMeetingNotesView: View {
             return
         }
         service.recipients = selectedEmails
-        service.subject = meetingTitle.isEmpty
-            ? "Meeting notes"
-            : "Meeting notes: \(meetingTitle)"
+        service.subject = meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)"
         service.perform(withItems: [generatedNotes])
         status = "Email draft prepared for review and sending."
     }

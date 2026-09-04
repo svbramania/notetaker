@@ -8,6 +8,7 @@ enum MeetingProvider: String, Codable, CaseIterable {
     case microsoftTeams = "Microsoft Teams"
     case googleMeet = "Google Meet"
     case zoom = "Zoom"
+    case calendarEvent = "Calendar event"
 
     var systemImage: String {
         switch self {
@@ -17,6 +18,8 @@ enum MeetingProvider: String, Codable, CaseIterable {
             return "video"
         case .zoom:
             return "video.circle"
+        case .calendarEvent:
+            return "calendar"
         }
     }
 }
@@ -53,6 +56,16 @@ enum CalendarSelectionPolicy {
         excluded: Set<String>
     ) -> Set<String> {
         available.subtracting(excluded)
+    }
+}
+
+enum CalendarMeetingEligibility {
+    static func shouldInclude(
+        hasSupportedMeetingLink: Bool,
+        includeInvitesWithoutLinks: Bool,
+        hasAttendees: Bool
+    ) -> Bool {
+        hasSupportedMeetingLink || (includeInvitesWithoutLinks && hasAttendees)
     }
 }
 
@@ -177,6 +190,9 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     @Published private(set) var activeMeeting: UpcomingVideoMeeting?
     @Published private(set) var meetingToPrompt: UpcomingVideoMeeting?
     @Published private(set) var availableCalendars: [AvailableMeetingCalendar] = []
+    @Published private(set) var includeInvitesWithoutLinks = UserDefaults.standard.bool(
+        forKey: "includeCalendarInvitesWithoutMeetingLinks"
+    )
     @Published private(set) var status = "Calendar alerts are not enabled"
 
     static let notificationLeadTime: TimeInterval = 5 * 60
@@ -350,6 +366,12 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         Task { await refresh() }
     }
 
+    func setIncludeInvitesWithoutLinks(_ included: Bool) {
+        includeInvitesWithoutLinks = included
+        UserDefaults.standard.set(included, forKey: "includeCalendarInvitesWithoutMeetingLinks")
+        Task { await refresh() }
+    }
+
     private func refreshDelay(after date: Date) -> TimeInterval {
         guard let nextCalendarBoundary else { return 60 }
         return min(60, max(0.25, nextCalendarBoundary.timeIntervalSince(date) + 0.1))
@@ -442,7 +464,13 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             .compactMap { $0 }
             .joined(separator: "\n")
 
-        guard let detection = MeetingLinkDetector.detect(in: searchableText) else { return nil }
+        let detection = MeetingLinkDetector.detect(in: searchableText)
+        let hasAttendees = !(event.attendees ?? []).isEmpty
+        guard CalendarMeetingEligibility.shouldInclude(
+            hasSupportedMeetingLink: detection != nil,
+            includeInvitesWithoutLinks: includeInvitesWithoutLinks,
+            hasAttendees: hasAttendees
+        ) else { return nil }
 
         let attendees = (event.attendees ?? []).compactMap { participant in
             let name = participant.name?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -468,8 +496,8 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             title: event.title?.isEmpty == false ? event.title : "Video meeting",
             startDate: event.startDate,
             endDate: event.endDate,
-            provider: detection.provider,
-            meetingURL: detection.url ?? event.url,
+            provider: detection?.provider ?? .calendarEvent,
+            meetingURL: detection?.url ?? event.url,
             attendeeNames: attendees,
             emailRecipients: emailRecipients
         )
