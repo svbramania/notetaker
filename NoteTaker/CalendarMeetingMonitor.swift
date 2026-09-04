@@ -29,6 +29,7 @@ struct UpcomingVideoMeeting: Identifiable, Equatable {
     let provider: MeetingProvider
     let meetingURL: URL?
     let attendeeNames: [String]
+    let emailRecipients: [MeetingEmailRecipient]
 }
 
 struct AvailableMeetingCalendar: Identifiable, Equatable {
@@ -447,6 +448,20 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             let name = participant.name?.trimmingCharacters(in: .whitespacesAndNewlines)
             return name?.isEmpty == false ? name : nil
         }
+        let emailParticipants = (event.attendees ?? []) + [event.organizer].compactMap { $0 }
+        let emailRecipients = EmailAddressExtractor.merged(
+            emailParticipants.flatMap { participant in
+                let name = participant.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return EmailAddressExtractor.addresses(
+                    in: participant.url?.absoluteString ?? ""
+                ).map { email in
+                    MeetingEmailRecipient(
+                        name: name.flatMap { $0.isEmpty ? nil : $0 } ?? email,
+                        email: email
+                    )
+                }
+            }
+        )
 
         return UpcomingVideoMeeting(
             id: event.eventIdentifier ?? "\(event.startDate.timeIntervalSince1970)-\(event.title ?? "Meeting")",
@@ -455,7 +470,8 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             endDate: event.endDate,
             provider: detection.provider,
             meetingURL: detection.url ?? event.url,
-            attendeeNames: attendees
+            attendeeNames: attendees,
+            emailRecipients: emailRecipients
         )
     }
 
