@@ -130,6 +130,48 @@ final class CalendarSelectionPolicyTests: XCTestCase {
     }
 }
 
+final class CalendarMeetingEligibilityTests: XCTestCase {
+    func testSupportedMeetingLinkIsIncludedByDefault() {
+        XCTAssertTrue(
+            CalendarMeetingEligibility.shouldInclude(
+                hasSupportedMeetingLink: true,
+                includeInvitesWithoutLinks: false,
+                hasAttendees: false
+            )
+        )
+    }
+
+    func testInviteWithoutLinkIsExcludedByDefault() {
+        XCTAssertFalse(
+            CalendarMeetingEligibility.shouldInclude(
+                hasSupportedMeetingLink: false,
+                includeInvitesWithoutLinks: false,
+                hasAttendees: true
+            )
+        )
+    }
+
+    func testInviteWithoutLinkCanBeIncluded() {
+        XCTAssertTrue(
+            CalendarMeetingEligibility.shouldInclude(
+                hasSupportedMeetingLink: false,
+                includeInvitesWithoutLinks: true,
+                hasAttendees: true
+            )
+        )
+    }
+
+    func testPersonalBlockWithoutAttendeesRemainsExcluded() {
+        XCTAssertFalse(
+            CalendarMeetingEligibility.shouldInclude(
+                hasSupportedMeetingLink: false,
+                includeInvitesWithoutLinks: true,
+                hasAttendees: false
+            )
+        )
+    }
+}
+
 final class RecordingFolderNamerTests: XCTestCase {
     func testUsesCalendarTitleAndTimestamp() {
         let date = Date(timeIntervalSince1970: 0)
@@ -190,6 +232,87 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Action Items"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Owner"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Due Date"))
+    }
+
+    func testRecognizesOpenAICreditLimit() {
+        XCTAssertTrue(
+            MeetingNotesService.isQuotaOrCreditLimit(
+                statusCode: 429,
+                errorType: "insufficient_quota",
+                errorCode: "credit_balance_exhausted",
+                message: "Your credit balance is exhausted.",
+                retryAfter: nil,
+                provider: .openAI
+            )
+        )
+    }
+
+    func testRecognizesClaudeSpendCapWithoutRetryAfter() {
+        XCTAssertTrue(
+            MeetingNotesService.isQuotaOrCreditLimit(
+                statusCode: 429,
+                errorType: "rate_limit_error",
+                errorCode: nil,
+                message: "Monthly spend cap reached.",
+                retryAfter: nil,
+                provider: .claude
+            )
+        )
+    }
+
+    func testTemporaryRateLimitDoesNotTriggerProviderFallback() {
+        XCTAssertFalse(
+            MeetingNotesService.isQuotaOrCreditLimit(
+                statusCode: 429,
+                errorType: "rate_limit_error",
+                errorCode: nil,
+                message: "Rate limit reached.",
+                retryAfter: "15",
+                provider: .claude
+            )
+        )
+    }
+
+    func testFallbackPolicyRequiresOptInQuotaErrorAndNextProvider() {
+        let quotaError = MeetingNotesServiceError.quotaExceeded("Limit reached")
+        XCTAssertTrue(
+            APIFallbackPolicy.shouldTryNext(
+                after: quotaError,
+                automaticFallbackEnabled: true,
+                hasNextProvider: true
+            )
+        )
+        XCTAssertFalse(
+            APIFallbackPolicy.shouldTryNext(
+                after: quotaError,
+                automaticFallbackEnabled: false,
+                hasNextProvider: true
+            )
+        )
+        XCTAssertFalse(
+            APIFallbackPolicy.shouldTryNext(
+                after: MeetingNotesServiceError.provider("Invalid model"),
+                automaticFallbackEnabled: true,
+                hasNextProvider: true
+            )
+        )
+    }
+
+    func testProviderConfigurationsPreserveUserOrder() throws {
+        let first = APIProviderConfiguration(
+            provider: .claude,
+            label: "Primary",
+            model: "claude-sonnet-5"
+        )
+        let second = APIProviderConfiguration(
+            provider: .openAI,
+            label: "Backup",
+            model: "gpt-6-astra"
+        )
+        let data = try JSONEncoder().encode([first, second])
+        let restored = try JSONDecoder().decode([APIProviderConfiguration].self, from: data)
+
+        XCTAssertEqual(restored, [first, second])
     }
 }
 
