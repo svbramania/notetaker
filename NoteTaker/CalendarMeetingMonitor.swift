@@ -361,12 +361,14 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
                 return AvailableMeetingCalendar(
                     id: calendar.calendarIdentifier,
                     title: calendar.title,
-                    accountIdentifier: source.sourceIdentifier,
-                    accountName: source.title,
-                    providerName: CalendarAccountProvider.name(
-                        sourceTitle: source.title,
-                        sourceType: source.sourceType
-                    )
+                    accountIdentifier: source?.sourceIdentifier ?? "calendar-\(calendar.calendarIdentifier)",
+                    accountName: source?.title ?? "Calendar Account",
+                    providerName: source.map {
+                        CalendarAccountProvider.name(
+                            sourceTitle: $0.title,
+                            sourceType: $0.sourceType
+                        )
+                    } ?? "Calendar"
                 )
             }
     }
