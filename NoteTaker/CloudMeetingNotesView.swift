@@ -8,6 +8,8 @@ struct CloudMeetingNotesView: View {
     let suggestedRecipients: [MeetingEmailRecipient]
 
     @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
+    @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
+    @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
     @State private var configurations: [APIProviderConfiguration] = []
     @State private var newProvider: MeetingNotesProvider = .openAI
     @State private var newLabel = ""
@@ -37,6 +39,10 @@ struct CloudMeetingNotesView: View {
         recipients
             .filter { selectedRecipientIDs.contains($0.id) }
             .map(\.email)
+    }
+
+    private var selectedEmailClient: MeetingEmailClient? {
+        MeetingEmailClient(rawValue: emailClientRawValue)
     }
 
     var body: some View {
@@ -141,6 +147,7 @@ struct CloudMeetingNotesView: View {
                                     set: { selected in
                                         if selected {
                                             selectedRecipientIDs.insert(recipient.id)
+                                            lastRecipientEmail = recipient.email
                                         } else {
                                             selectedRecipientIDs.remove(recipient.id)
                                         }
@@ -164,9 +171,16 @@ struct CloudMeetingNotesView: View {
                         Spacer()
                         Text("\(selectedEmails.count) recipients selected")
                             .foregroundStyle(.secondary)
-                        Button("Prepare Email") { prepareEmail() }
+                        Picker("Send with", selection: $emailClientRawValue) {
+                            Text("Choose email client").tag("")
+                            ForEach(MeetingEmailClient.allCases) { client in
+                                Text(client.rawValue).tag(client.rawValue)
+                            }
+                        }
+                        .frame(width: 235)
+                        Button("Open Email Draft") { prepareEmail() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(selectedEmails.isEmpty)
+                            .disabled(selectedEmails.isEmpty || selectedEmailClient == nil)
                     }
                 }
             }
@@ -178,7 +192,10 @@ struct CloudMeetingNotesView: View {
         }
         .onChange(of: suggestedRecipients, initial: true) { _, updatedRecipients in
             recipients = EmailAddressExtractor.merged(updatedRecipients)
-            selectedRecipientIDs = Set(recipients.map(\.id))
+            selectedRecipientIDs = RecipientSelectionPolicy.initialSelection(
+                from: recipients,
+                lastSelectedEmail: lastRecipientEmail
+            )
         }
     }
 
@@ -360,13 +377,23 @@ struct CloudMeetingNotesView: View {
     }
 
     private func prepareEmail() {
-        guard let service = NSSharingService(named: .composeEmail) else {
-            status = "Set up an email application on this Mac to prepare the message."
+        guard let selectedEmailClient else {
+            status = "Choose Apple Mail, Microsoft Outlook, or Gmail first."
             return
         }
-        service.recipients = selectedEmails
-        service.subject = meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)"
-        service.perform(withItems: [generatedNotes])
-        status = "Email draft prepared for review and sending."
+        if selectedEmails.count == 1, let selectedEmail = selectedEmails.first {
+            lastRecipientEmail = selectedEmail
+        }
+        let draft = MeetingEmailDraft(
+            recipients: selectedEmails,
+            subject: meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)",
+            body: generatedNotes
+        )
+        do {
+            try MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
+            status = "\(selectedEmailClient.rawValue) opened with the addressed notes for review."
+        } catch {
+            status = error.localizedDescription
+        }
     }
 }
