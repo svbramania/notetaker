@@ -232,6 +232,78 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Action Items"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Owner"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Due Date"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Financial Terms and Amounts"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("every mention of money"))
+    }
+
+    func testCapturesMoneyWithSessionContext() {
+        let transcript = "[10:04] System: The total is $1800 for 6 sessions."
+
+        XCTAssertEqual(
+            FinancialMentionExtractor.evidenceLines(in: transcript),
+            ["[10:04] System: The total is $1800 for 6 sessions."]
+        )
+    }
+
+    func testCapturesMultipleCurrencyFormats() {
+        let transcript = """
+        Budget approved: USD 1,800.
+        Deposit: 150 dollars.
+        Local cost: ₹2500.
+        """
+
+        XCTAssertEqual(FinancialMentionExtractor.evidenceLines(in: transcript).count, 3)
+    }
+
+    func testCapturesSpokenMoneyAndFinancialTerms() {
+        let transcript = """
+        The price is eighteen hundred dollars for six sessions.
+        A deposit is due next week.
+        """
+
+        XCTAssertEqual(FinancialMentionExtractor.evidenceLines(in: transcript).count, 2)
+    }
+
+    func testSessionCountAloneIsNotClassifiedAsMoney() {
+        XCTAssertTrue(
+            FinancialMentionExtractor.evidenceLines(in: "We agreed to 6 sessions.").isEmpty
+        )
+    }
+
+    func testFinancialEvidenceIsAddedToGeneratedNotes() {
+        let notes = """
+        # Meeting Notes
+        ## Financial Terms and Amounts
+        Pricing was discussed.
+        ## Key Discussion Points
+        Delivery schedule
+        """
+        let verified = FinancialMentionExtractor.ensuringEvidence(
+            in: notes,
+            from: "[10:04] System: The total is $1800 for 6 sessions."
+        )
+
+        XCTAssertTrue(verified.contains("Transcript evidence: [10:04] System: The total is $1800 for 6 sessions."))
+    }
+
+    func testFinancialEvidenceSectionIsAddedWhenProviderOmitsIt() {
+        let verified = FinancialMentionExtractor.ensuringEvidence(
+            in: "# Meeting Notes\n## Executive Summary\nAgreement reached.",
+            from: "The total is $1800 for 6 sessions."
+        )
+
+        XCTAssertTrue(verified.contains("## Financial Terms and Amounts"))
+        XCTAssertTrue(verified.contains("$1800 for 6 sessions"))
+    }
+
+    func testNoKeyChatGPTPromptProtectsFinancialEvidence() {
+        let prompt = LocalScribe().chatGPTPrompt(
+            for: "[10:04] System: The total is $1800 for 6 sessions."
+        )
+
+        XCTAssertTrue(prompt.contains("Financial terms and amounts"))
+        XCTAssertTrue(prompt.contains("$1800 for 6 sessions"))
+        XCTAssertTrue(prompt.contains("REQUIRED FINANCIAL EVIDENCE"))
     }
 
     func testRecognizesOpenAICreditLimit() {

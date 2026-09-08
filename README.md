@@ -20,6 +20,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Accepts multiple OpenAI and Claude API keys, stores each independently in macOS Keychain with device-only unlocked access, and lets the user arrange their attempt order.
 - Provides an opt-in fallback that tries the next configured provider only when the current provider reports an exhausted credit, quota, usage, or spend limit.
 - Generates editable meeting notes with an executive summary, decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
+- Gives Apple Speech financial vocabulary hints, detects monetary references deterministically, requires every amount and its context in the generated notes, and inserts exact transcript evidence when needed—for example, `$1800 for 6 sessions`.
 - Extracts attendee email addresses from calendar invitations and manually entered attendee details.
 - Provides an **Everyone** recipient checkbox plus an individual checkbox for every attendee email address.
 - Creates an addressed email draft containing the reviewed notes through the Mac's configured email application.
@@ -82,6 +83,7 @@ The prepared ChatGPT prompt requests this Pyramid-style structure:
 Executive summary
 Decisions made
 Action items (owner and due date)
+Financial terms and amounts, with exact transcript evidence
 Key discussion points
 Open questions, risks, and dependencies
 Attendees and meeting details

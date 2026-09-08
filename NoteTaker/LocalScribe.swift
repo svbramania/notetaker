@@ -123,6 +123,13 @@ final class LocalScribe {
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
         request.addsPunctuation = true
+        request.taskHint = .dictation
+        request.contextualStrings = [
+            "dollars", "cents", "euros", "pounds", "rupees",
+            "price", "pricing", "cost", "fee", "budget", "rate",
+            "payment", "deposit", "invoice", "revenue", "expense",
+            "per session", "per hour", "per month", "per year"
+        ]
 
         let result = try await recognize(recognizer: recognizer, request: request)
         return groupIntoUtterances(
@@ -406,18 +413,28 @@ final class LocalScribe {
     }
 
     func chatGPTPrompt(for transcript: String) -> String {
-        """
+        let financialEvidence = FinancialMentionExtractor.evidenceLines(in: transcript)
+        let financialEvidenceText = financialEvidence.isEmpty
+            ? "No monetary references were detected automatically; still review the complete transcript for financial information."
+            : financialEvidence.map { "- \($0)" }.joined(separator: "\n")
+
+        return """
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
         Follow this structure and lead with the most important conclusion:
         1. Executive summary
         2. Decisions made
         3. Action items in a table with owner and due date; write "Not stated" when either is absent
-        4. Key discussion points
-        5. Open questions, risks, and dependencies
-        6. Attendees and meeting details
+        4. Financial terms and amounts: capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments. Preserve the exact amount, currency, quantity, unit, timing, conditions, and context.
+        5. Key discussion points
+        6. Open questions, risks, and dependencies
+        7. Attendees and meeting details
 
         Keep names, numbers, dates, commitments, and qualifications accurate. Clearly label anything unclear in the transcript. Do not invent missing information.
+
+        REQUIRED FINANCIAL EVIDENCE
+        Include every applicable line below in the financial section:
+        \(financialEvidenceText)
 
         --- TRANSCRIPT START ---
         \(transcript)
