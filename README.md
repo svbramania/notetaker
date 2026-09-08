@@ -37,6 +37,9 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Keeps manual recordings independent, so calendar boundaries never stop a recording that the user started manually.
 - Names each recording folder from its meeting title followed by a timestamp, with a safe `Meeting` fallback for blank titles.
 - Provides a separate **Allow Access to Mic and Speakers** button with individual readiness indicators for microphone and system audio.
+- Listens locally for common closing phrases such as “bye,” “goodbye,” and “thanks everyone,” waits four seconds for continued conversation, then stops the recording when the sign-off remains final.
+- Automatically builds and saves the complete transcript after a spoken sign-off, a manual stop, or the calendar event's end time.
+- Provides a saved **Stop after a spoken sign-off** switch, enabled by default, with calendar end time retained as the fallback for calendar recordings.
 - Splits long recordings into 50-second files for reliable Apple Speech recognition, then rebuilds the complete timeline.
 - Removes substantially matching speech captured by both the microphone and system-audio tracks while preserving distinct contributions.
 
@@ -67,8 +70,8 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 6. Enter the meeting title and attendees manually, wait for a detected meeting prompt, or use calendar auto-recording.
 7. Click **Record Meeting** for a manual recording. From an upcoming-meeting prompt or automatic recording, the title and available attendee names are filled automatically.
 8. During the meeting, paste or type relevant chat messages and your own notes. Each entry is timestamped.
-9. Click **Stop Meeting** for a manual recording; an automatic recording stops at the calendar event's end time.
-10. Click **Build Transcript**.
+9. NoteTaker stops when a recognized spoken sign-off remains final for four seconds, when **Stop Meeting** is selected, or when the calendar event ends.
+10. The complete transcript is built and saved automatically after recording stops. **Build Transcript** remains available for manual retry.
 11. Review the complete local transcript.
 12. Use **Summarize in ChatGPT** for the existing no-key handoff, or add one or more OpenAI/Claude API keys and arrange their numbered attempt order.
 13. Optionally enable automatic provider fallback for exhausted usage, credit, quota, or spend limits, then select **Generate Meeting Notes**.
@@ -103,6 +106,7 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 - Link-only calendar eligibility is the default. The optional no-link setting covers timed invitations with attendees.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
 - Calendar auto-recording works while NoteTaker is running. It does not launch a closed application at an event's start time.
+- Spoken sign-off detection uses Apple's on-device live Speech recognition when the selected language is available. The four-second confirmation window allows continued conversation to cancel a pending stop.
 
 ## Privacy and consent
 

@@ -38,6 +38,7 @@ enum RecordingFolderNamer {
 final class MeetingRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
     @Published var status = "Ready"
+    @Published private(set) var detectedSignOffText: String?
 
     private var stream: SCStream?
 
@@ -48,6 +49,11 @@ final class MeetingRecorder: NSObject, ObservableObject {
     private var microphoneWriter: AVAssetWriter?
     private var microphoneInput: AVAssetWriterInput?
     private var microphoneSessionStarted = false
+
+    private let systemSignOffDetector = LiveSignOffDetector()
+    private let microphoneSignOffDetector = LiveSignOffDetector()
+    private var systemSignOffPhrase: String?
+    private var microphoneSignOffPhrase: String?
 
     private let screenQueue = DispatchQueue(label: "com.agilemindset.notetaker.screen")
     private let systemAudioQueue = DispatchQueue(label: "com.agilemindset.notetaker.system-audio")
@@ -62,7 +68,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
             .appendingPathComponent("NoteTaker/Meetings", isDirectory: true)
     }
 
-    func start(folderTitle: String? = nil) async throws {
+    func start(folderTitle: String? = nil, detectSignOffPhrases: Bool = true) async throws {
         guard !isRecording else { return }
         status = "Requesting permissions..."
 
@@ -77,7 +83,10 @@ final class MeetingRecorder: NSObject, ObservableObject {
         try configureWriters(in: folder)
 
         do {
-            try await startCapture()
+        try await startCapture()
+        if detectSignOffPhrases {
+            startSignOffDetection()
+        }
         } catch {
             await stopWriters()
             throw error
@@ -88,6 +97,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
     }
 
     func stop() async {
+        stopSignOffDetection()
         if let stream {
             try? await stream.stopCapture()
         }
@@ -97,6 +107,15 @@ final class MeetingRecorder: NSObject, ObservableObject {
 
         isRecording = false
         status = "Recording saved locally"
+    }
+
+    func setSignOffDetectionEnabled(_ enabled: Bool) {
+        guard isRecording else { return }
+        if enabled {
+            startSignOffDetection()
+        } else {
+            stopSignOffDetection()
+        }
     }
 
     private func configureWriters(in folder: URL) throws {
@@ -181,6 +200,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
     }
 
     private func appendSystemAudio(_ sampleBuffer: CMSampleBuffer) {
+        systemSignOffDetector.append(sampleBuffer)
         guard let writer = systemWriter,
               let input = systemInput,
               writer.status == .writing else { return }
@@ -196,6 +216,7 @@ final class MeetingRecorder: NSObject, ObservableObject {
     }
 
     private func appendMicrophoneAudio(_ sampleBuffer: CMSampleBuffer) {
+        microphoneSignOffDetector.append(sampleBuffer)
         guard let writer = microphoneWriter,
               let input = microphoneInput,
               writer.status == .writing else { return }
@@ -228,6 +249,37 @@ final class MeetingRecorder: NSObject, ObservableObject {
         microphoneWriter = nil
         microphoneInput = nil
         microphoneSessionStarted = false
+    }
+
+    private func startSignOffDetection() {
+        detectedSignOffText = nil
+        systemSignOffPhrase = nil
+        microphoneSignOffPhrase = nil
+
+        systemSignOffDetector.start { [weak self] transcript in
+            self?.updateSignOffPhrase(transcript, fromSystemAudio: true)
+        }
+        microphoneSignOffDetector.start { [weak self] transcript in
+            self?.updateSignOffPhrase(transcript, fromSystemAudio: false)
+        }
+    }
+
+    private func updateSignOffPhrase(_ transcript: String, fromSystemAudio: Bool) {
+        let phrase = SignOffPhraseDetector.matchingPhrase(in: transcript)
+        if fromSystemAudio {
+            systemSignOffPhrase = phrase
+        } else {
+            microphoneSignOffPhrase = phrase
+        }
+        detectedSignOffText = systemSignOffPhrase ?? microphoneSignOffPhrase
+    }
+
+    private func stopSignOffDetection() {
+        systemSignOffDetector.stop()
+        microphoneSignOffDetector.stop()
+        systemSignOffPhrase = nil
+        microphoneSignOffPhrase = nil
+        detectedSignOffText = nil
     }
 }
 
