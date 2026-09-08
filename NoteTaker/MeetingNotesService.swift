@@ -223,6 +223,62 @@ enum APIFallbackPolicy {
     }
 }
 
+enum FinancialMentionExtractor {
+    private static let pattern = #"(?:[$€£¥₹]\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b(?:USD|EUR|GBP|CAD|AUD|INR)\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b\d[\d,]*(?:\.\d{1,2})?\s?(?:dollars?|euros?|pounds?|rupees?|cents?)\b)|(?:\b(?:dollars?|euros?|pounds?|rupees?|cents?|price|pricing|costs?|fees?|budgets?|rates?|payments?|revenue|deposit|invoice|salary|compensation|expenses?|money)\b)"#
+
+    static func evidenceLines(in transcript: String) -> [String] {
+        guard let expression = try? NSRegularExpression(
+            pattern: pattern,
+            options: [.caseInsensitive]
+        ) else { return [] }
+
+        var seen: Set<String> = []
+        return transcript.components(separatedBy: .newlines).compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { return nil }
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard expression.firstMatch(in: line, range: range) != nil else { return nil }
+            return seen.insert(line).inserted ? line : nil
+        }
+    }
+
+    static func providerInput(for transcript: String) -> String {
+        let evidence = evidenceLines(in: transcript)
+        guard !evidence.isEmpty else { return transcript }
+
+        return """
+        TRANSCRIPT
+        \(transcript)
+
+        REQUIRED FINANCIAL EVIDENCE
+        The following transcript lines contain monetary information. Preserve every amount and its surrounding terms exactly in the Financial Terms and Amounts section:
+        \(evidence.map { "- \($0)" }.joined(separator: "\n"))
+        """
+    }
+
+    static func ensuringEvidence(in notes: String, from transcript: String) -> String {
+        let evidence = evidenceLines(in: transcript)
+        guard !evidence.isEmpty else { return notes }
+
+        let evidenceBlock = evidence
+            .map { "- Transcript evidence: \($0)" }
+            .joined(separator: "\n")
+        let heading = "## Financial Terms and Amounts"
+
+        guard let headingRange = notes.range(of: heading, options: .caseInsensitive) else {
+            return notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                + "\n\n\(heading)\n\(evidenceBlock)"
+        }
+
+        let insertionPoint = notes[headingRange.upperBound...].firstIndex(of: "\n")
+            .map { notes.index(after: $0) }
+            ?? notes.endIndex
+        var verifiedNotes = notes
+        verifiedNotes.insert(contentsOf: "\(evidenceBlock)\n", at: insertionPoint)
+        return verifiedNotes
+    }
+}
+
 struct MeetingNotesService {
     private struct OpenAIResponse: Decodable {
         struct Output: Decodable {
@@ -260,6 +316,8 @@ struct MeetingNotesService {
     ## Decisions Made
     ## Action Items
     Use a table with columns: Action, Owner, Due Date, Status. Write “Not stated” where an owner or date is absent.
+    ## Financial Terms and Amounts
+    Capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments. Preserve the exact amount, currency, quantity, unit, timing, conditions, and surrounding context. If no monetary information was stated, write “None stated.”
     ## Key Discussion Points
     ## Open Questions, Risks, and Dependencies
     ## Attendees and Meeting Details
@@ -273,20 +331,25 @@ struct MeetingNotesService {
         model: String,
         apiKey: String
     ) async throws -> String {
+        let generatedNotes: String
         switch provider {
         case .openAI:
-            return try await generateWithOpenAI(
+            generatedNotes = try await generateWithOpenAI(
                 transcript: transcript,
                 model: model,
                 apiKey: apiKey
             )
         case .claude:
-            return try await generateWithClaude(
+            generatedNotes = try await generateWithClaude(
                 transcript: transcript,
                 model: model,
                 apiKey: apiKey
             )
         }
+        return FinancialMentionExtractor.ensuringEvidence(
+            in: generatedNotes,
+            from: transcript
+        )
     }
 
     private func generateWithOpenAI(
@@ -302,7 +365,7 @@ struct MeetingNotesService {
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model,
             "instructions": Self.instructions,
-            "input": transcript
+            "input": FinancialMentionExtractor.providerInput(for: transcript)
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -325,7 +388,10 @@ struct MeetingNotesService {
             "model": model,
             "max_tokens": 4_096,
             "system": Self.instructions,
-            "messages": [["role": "user", "content": transcript]]
+            "messages": [[
+                "role": "user",
+                "content": FinancialMentionExtractor.providerInput(for: transcript)
+            ]]
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
