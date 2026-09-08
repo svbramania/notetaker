@@ -32,6 +32,34 @@ final class MeetingLinkDetectorTests: XCTestCase {
     }
 }
 
+final class SignOffPhraseDetectorTests: XCTestCase {
+    func testRecognizesByeAtEndOfSpeech() {
+        XCTAssertEqual(
+            SignOffPhraseDetector.matchingPhrase(in: "Thanks for the update. Bye!"),
+            "bye"
+        )
+    }
+
+    func testRecognizesCommonMeetingClosingPhrase() {
+        XCTAssertEqual(
+            SignOffPhraseDetector.matchingPhrase(in: "That covers everything. Thank you, everyone."),
+            "thank you everyone"
+        )
+    }
+
+    func testDoesNotStopWhenGoodbyeIsFollowedByMoreDiscussion() {
+        XCTAssertNil(
+            SignOffPhraseDetector.matchingPhrase(
+                in: "Before we say goodbye, we need to discuss one more topic."
+            )
+        )
+    }
+
+    func testDoesNotTreatBuyAsBye() {
+        XCTAssertNil(SignOffPhraseDetector.matchingPhrase(in: "We should buy the annual plan."))
+    }
+}
+
 final class CalendarMeetingTimelineTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 10_000)
 
