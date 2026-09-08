@@ -32,7 +32,9 @@ struct ContentView: View {
     @State private var autoRecordingSyncPending = false
     @State private var showsCalendarSelection = false
     @State private var calendarEmailRecipients: [MeetingEmailRecipient] = []
+    @State private var signOffStopTask: Task<Void, Never>?
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
+    @AppStorage("autoStopOnSpokenSignOff") private var autoStopOnSpokenSignOff = true
 
     private let scribe = LocalScribe()
 
@@ -156,6 +158,14 @@ struct ContentView: View {
         .onChange(of: autoRecordCalendarMeetings) { _, _ in
             Task { await synchronizeCalendarRecording() }
         }
+        .onChange(of: recorder.detectedSignOffText) { _, phrase in
+            scheduleSpokenSignOffStop(for: phrase)
+        }
+        .onChange(of: autoStopOnSpokenSignOff) { _, enabled in
+            signOffStopTask?.cancel()
+            signOffStopTask = nil
+            recorder.setSignOffDetectionEnabled(enabled)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recordingPermissions.refresh()
             Task {
@@ -205,6 +215,16 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                Toggle(
+                    "Stop after a spoken sign-off and build the transcript automatically",
+                    isOn: $autoStopOnSpokenSignOff
+                )
+                .toggleStyle(.switch)
+
+                Text("When a closing phrase such as “bye,” “goodbye,” or “thanks everyone” remains the final speech for four seconds, NoteTaker stops recording and transcribes both audio tracks. Calendar end time remains the fallback for calendar recordings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(6)
         }
@@ -359,8 +379,7 @@ struct ContentView: View {
                     skippedAutoMeetingIDs.insert(autoRecordedMeetingID)
                     self.autoRecordedMeetingID = nil
                 }
-                await recorder.stop()
-                endedAt = Date()
+                await finishRecordingAndTranscribe(status: "Recording stopped — building transcript")
             } else {
                 if clearCalendarRecipients {
                     calendarEmailRecipients = []
@@ -369,7 +388,13 @@ struct ContentView: View {
                 entries = []
                 startedAt = Date()
                 endedAt = nil
-                try await recorder.start(folderTitle: title)
+                if autoStopOnSpokenSignOff {
+                    try? await scribe.requestAuthorization()
+                }
+                try await recorder.start(
+                    folderTitle: title,
+                    detectSignOffPhrases: autoStopOnSpokenSignOff
+                )
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -425,7 +450,13 @@ struct ContentView: View {
         errorMessage = nil
 
         do {
-            try await recorder.start(folderTitle: activeMeeting.title)
+            if autoStopOnSpokenSignOff {
+                try? await scribe.requestAuthorization()
+            }
+            try await recorder.start(
+                folderTitle: activeMeeting.title,
+                detectSignOffPhrases: autoStopOnSpokenSignOff
+            )
             autoRecordedMeetingID = activeMeeting.id
             recorder.status = "Auto-recording until \(meetingTime(activeMeeting.endDate))"
         } catch {
@@ -439,11 +470,49 @@ struct ContentView: View {
         guard autoRecordedMeetingID != nil else { return }
 
         if recorder.isRecording {
-            await recorder.stop()
-            endedAt = Date()
-            recorder.status = status
+            await finishRecordingAndTranscribe(status: status)
         }
         autoRecordedMeetingID = nil
+    }
+
+    private func scheduleSpokenSignOffStop(for phrase: String?) {
+        signOffStopTask?.cancel()
+        signOffStopTask = nil
+
+        guard autoStopOnSpokenSignOff,
+              let phrase,
+              recorder.isRecording,
+              !isProcessing else { return }
+
+        signOffStopTask = Task {
+            do {
+                try await Task.sleep(for: .seconds(4))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  recorder.isRecording,
+                  recorder.detectedSignOffText == phrase else { return }
+
+            if let autoRecordedMeetingID {
+                skippedAutoMeetingIDs.insert(autoRecordedMeetingID)
+                self.autoRecordedMeetingID = nil
+            }
+            signOffStopTask = nil
+            await finishRecordingAndTranscribe(
+                status: "Heard “\(phrase)” — recording stopped and transcript is being built"
+            )
+        }
+    }
+
+    private func finishRecordingAndTranscribe(status: String) async {
+        guard recorder.isRecording else { return }
+        signOffStopTask?.cancel()
+        signOffStopTask = nil
+        await recorder.stop()
+        endedAt = Date()
+        recorder.status = status
+        await buildTranscript()
     }
 
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
