@@ -255,13 +255,15 @@ final class MeetingNotesServiceTests: XCTestCase {
     }
 
     func testMeetingNotesPromptIncludesRequiredSections() {
-        XCTAssertTrue(MeetingNotesService.instructions.contains("Executive Summary"))
-        XCTAssertTrue(MeetingNotesService.instructions.contains("Decisions Made"))
-        XCTAssertTrue(MeetingNotesService.instructions.contains("Action Items"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("EXECUTIVE SUMMARY"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("DECISIONS MADE"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("ACTION ITEMS"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Owner"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Due Date"))
-        XCTAssertTrue(MeetingNotesService.instructions.contains("Financial Terms and Amounts"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("every mention of money"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Pyramid Principle"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Do not use Markdown heading symbols"))
     }
 
     func testCapturesMoneyWithSessionContext() {
@@ -320,7 +322,7 @@ final class MeetingNotesServiceTests: XCTestCase {
             from: "The total is $1800 for 6 sessions."
         )
 
-        XCTAssertTrue(verified.contains("## Financial Terms and Amounts"))
+        XCTAssertTrue(verified.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(verified.contains("$1800 for 6 sessions"))
     }
 
@@ -329,9 +331,95 @@ final class MeetingNotesServiceTests: XCTestCase {
             for: "[10:04] System: The total is $1800 for 6 sessions."
         )
 
-        XCTAssertTrue(prompt.contains("Financial terms and amounts"))
+        XCTAssertTrue(prompt.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(prompt.contains("$1800 for 6 sessions"))
         XCTAssertTrue(prompt.contains("REQUIRED FINANCIAL EVIDENCE"))
+    }
+
+    func testFormatterRemovesMarkdownHeadingHashesAndBoldMarkers() {
+        let formatted = MeetingNotesFormatter.finalize(
+            "# MEETING NOTES\n## EXECUTIVE SUMMARY\n**Agreement reached.**",
+            transcript: "Agreement reached."
+        )
+
+        XCTAssertFalse(formatted.contains("#"))
+        XCTAssertFalse(formatted.contains("**"))
+        XCTAssertTrue(formatted.contains("EXECUTIVE SUMMARY\nAgreement reached."))
+    }
+
+    func testFormatterPlacesTranscriptNumbersAtTheBeginning() {
+        let formatted = MeetingNotesFormatter.finalize(
+            "EXECUTIVE SUMMARY\nAgreement reached.",
+            transcript: "[10:04:22] System: The total is $1800 for 6 sessions."
+        )
+
+        XCTAssertTrue(
+            formatted.hasPrefix(
+                "KEY NUMBERS\n• The total is $1800 for 6 sessions."
+            )
+        )
+    }
+
+    func testNumericEvidenceIgnoresTimestampButKeepsContentNumbers() {
+        XCTAssertEqual(
+            NumericMentionExtractor.evidenceLines(
+                in: "- [10:04:22] **System:** The total is $1800 for 6 sessions."
+            ),
+            ["The total is $1800 for 6 sessions."]
+        )
+    }
+
+    func testOnlyLastIndividuallySelectedRecipientIsPreselected() {
+        let recipients = [
+            MeetingEmailRecipient(name: "One", email: "one@example.com"),
+            MeetingEmailRecipient(name: "Two", email: "two@example.com")
+        ]
+
+        XCTAssertEqual(
+            RecipientSelectionPolicy.initialSelection(
+                from: recipients,
+                lastSelectedEmail: "TWO@example.com"
+            ),
+            ["two@example.com"]
+        )
+        XCTAssertTrue(
+            RecipientSelectionPolicy.initialSelection(
+                from: recipients,
+                lastSelectedEmail: ""
+            ).isEmpty
+        )
+    }
+
+    func testMailAndGmailDraftURLsContainMessageDetails() throws {
+        let draft = MeetingEmailDraft(
+            recipients: ["one@example.com", "two@example.com"],
+            subject: "Meeting notes: Pricing",
+            body: "KEY NUMBERS\n• $1800 for 6 sessions"
+        )
+        let mailURL = try XCTUnwrap(
+            MeetingEmailDraftURLBuilder.url(for: draft, client: .appleMail)
+        )
+        let mailComponents = try XCTUnwrap(URLComponents(url: mailURL, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(mailComponents.scheme, "mailto")
+        XCTAssertEqual(mailComponents.path, "one@example.com,two@example.com")
+        XCTAssertEqual(
+            mailComponents.queryItems?.first(where: { $0.name == "subject" })?.value,
+            draft.subject
+        )
+
+        let gmailURL = try XCTUnwrap(
+            MeetingEmailDraftURLBuilder.url(for: draft, client: .gmail)
+        )
+        let gmailComponents = try XCTUnwrap(URLComponents(url: gmailURL, resolvingAgainstBaseURL: false))
+        XCTAssertEqual(gmailComponents.host, "mail.google.com")
+        XCTAssertEqual(
+            gmailComponents.queryItems?.first(where: { $0.name == "to" })?.value,
+            "one@example.com,two@example.com"
+        )
+        XCTAssertEqual(
+            gmailComponents.queryItems?.first(where: { $0.name == "body" })?.value,
+            draft.body
+        )
     }
 
     func testRecognizesOpenAICreditLimit() {

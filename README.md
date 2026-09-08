@@ -19,11 +19,14 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Keeps the signed-in ChatGPT handoff available without an API key.
 - Accepts multiple OpenAI and Claude API keys, stores each independently in macOS Keychain with device-only unlocked access, and lets the user arrange their attempt order.
 - Provides an opt-in fallback that tries the next configured provider only when the current provider reports an exhausted credit, quota, usage, or spend limit.
-- Generates editable meeting notes with an executive summary, decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
+- Generates clean, editable, email-ready plain-text notes without Markdown heading clutter.
+- Places every transcript-supported number, amount, date, percentage, quantity, and duration in a verified **KEY NUMBERS** block at the top, then applies the Pyramid Principle to the executive summary.
+- Includes decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
 - Gives Apple Speech financial vocabulary hints, detects monetary references deterministically, requires every amount and its context in the generated notes, and inserts exact transcript evidence when needed—for example, `$1800 for 6 sessions`.
 - Extracts attendee email addresses from calendar invitations and manually entered attendee details.
 - Provides an **Everyone** recipient checkbox plus an individual checkbox for every attendee email address.
-- Creates an addressed email draft containing the reviewed notes through the Mac's configured email application.
+- Starts each new recipient list with only the last individually selected address checked; all other addresses remain unchecked.
+- Asks the user to choose Apple Mail, Microsoft Outlook, or Gmail in Browser, then opens the reviewed notes in that specific email client.
 - Sends content to ChatGPT only when the user pastes the prepared prompt into ChatGPT and submits it.
 - Reads upcoming events from calendars already synchronized with macOS Calendar.
 - Discovers calendars across multiple Gmail, Outlook, Exchange, iCloud, CalDAV, and local accounts connected to the Mac.
@@ -75,21 +78,24 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 11. Review the complete local transcript.
 12. Use **Summarize in ChatGPT** for the existing no-key handoff, or add one or more OpenAI/Claude API keys and arrange their numbered attempt order.
 13. Optionally enable automatic provider fallback for exhausted usage, credit, quota, or spend limits, then select **Generate Meeting Notes**.
-14. Select **Everyone** or individual attendee email checkboxes, then choose **Prepare Email**.
-15. Review the addressed draft in the configured Mac email application and send it.
+14. Select **Everyone** or individual attendee email checkboxes. On the next meeting, only the most recently selected individual address is preselected.
+15. Choose Apple Mail, Microsoft Outlook, or Gmail from **Send with**, then choose **Open Email Draft**.
+16. Review the addressed draft in the selected email client and send it.
 
 ## ChatGPT summary output
 
-The prepared ChatGPT prompt requests this Pyramid-style structure:
+The prepared ChatGPT prompt requests clean plain text with the supporting numbers first and this Pyramid-style structure:
 
 ```text
-Executive summary
-Decisions made
-Action items (owner and due date)
-Financial terms and amounts, with exact transcript evidence
-Key discussion points
-Open questions, risks, and dependencies
-Attendees and meeting details
+KEY NUMBERS
+MEETING NOTES
+EXECUTIVE SUMMARY (main conclusion first, followed by supporting facts)
+DECISIONS MADE
+ACTION ITEMS (owner, due date, and status)
+FINANCIAL TERMS AND AMOUNTS, with exact transcript evidence
+KEY DISCUSSION POINTS
+OPEN QUESTIONS, RISKS, AND DEPENDENCIES
+ATTENDEES AND MEETING DETAILS
 ```
 
 The full local transcript remains the source of truth. Both the ChatGPT handoff and API-generated workflow instruct the selected model to use only transcript-supported information and mark missing owners and dates as “Not stated.” ChatGPT subscriptions, OpenAI API usage, and Claude API usage have separate billing arrangements.
@@ -101,7 +107,7 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
 - The ChatGPT handoff requires the user to paste and send the prepared prompt. The optional OpenAI and Claude integrations send the transcript directly after the user selects **Generate Meeting Notes**.
-- **Prepare Email** opens an addressed draft for review and sending through the configured Mac email application.
+- **Open Email Draft** requires the user to choose Apple Mail, Microsoft Outlook, or Gmail in Browser and opens that specific client for review and sending.
 - Calendar detection uses every selected calendar available through macOS Calendar, including multiple Google and Microsoft accounts.
 - Link-only calendar eligibility is the default. The optional no-link setting covers timed invitations with attendees.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
