@@ -417,24 +417,32 @@ final class LocalScribe {
         let financialEvidenceText = financialEvidence.isEmpty
             ? "No monetary references were detected automatically; still review the complete transcript for financial information."
             : financialEvidence.map { "- \($0)" }.joined(separator: "\n")
+        let numericEvidence = NumericMentionExtractor.evidenceLines(in: transcript)
+        let numericEvidenceText = numericEvidence.isEmpty
+            ? "No numeric references were detected automatically; still review the complete transcript for material numbers."
+            : numericEvidence.map { "- \($0)" }.joined(separator: "\n")
 
         return """
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
-        Follow this structure and lead with the most important conclusion:
-        1. Executive summary
-        2. Decisions made
-        3. Action items in a table with owner and due date; write "Not stated" when either is absent
-        4. Financial terms and amounts: capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments. Preserve the exact amount, currency, quantity, unit, timing, conditions, and context.
-        5. Key discussion points
-        6. Open questions, risks, and dependencies
-        7. Attendees and meeting details
+        Produce clean, email-ready plain text. Do not use Markdown hash marks or Markdown tables. Start with KEY NUMBERS and include every material number, amount, date, percentage, quantity, and duration. Then use this structure:
+        1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts
+        2. DECISIONS MADE
+        3. ACTION ITEMS — format each action as a numbered line with owner, due date, and status; write "Not stated" when an owner or date is absent
+        4. FINANCIAL TERMS AND AMOUNTS — capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments, preserving the exact amount, currency, quantity, unit, timing, conditions, and context
+        5. KEY DISCUSSION POINTS
+        6. OPEN QUESTIONS, RISKS, AND DEPENDENCIES
+        7. ATTENDEES AND MEETING DETAILS
 
         Keep names, numbers, dates, commitments, and qualifications accurate. Clearly label anything unclear in the transcript. Do not invent missing information.
 
         REQUIRED FINANCIAL EVIDENCE
         Include every applicable line below in the financial section:
         \(financialEvidenceText)
+
+        REQUIRED NUMERIC EVIDENCE
+        Place every applicable line below at the start under KEY NUMBERS and use it in the executive summary where material:
+        \(numericEvidenceText)
 
         --- TRANSCRIPT START ---
         \(transcript)
