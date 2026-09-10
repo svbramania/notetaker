@@ -425,7 +425,7 @@ final class LocalScribe {
         return """
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
-        Produce clean, email-ready plain text. Do not use Markdown hash marks or Markdown tables. Start with KEY NUMBERS and include every material number, amount, date, percentage, quantity, and duration. Then use this structure:
+        Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Start with KEY NUMBERS and include every material number, amount, date, percentage, quantity, and duration. Then use this structure:
         1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts
         2. DECISIONS MADE
         3. ACTION ITEMS — format each action as a numbered line with owner, due date, and status; write "Not stated" when an owner or date is absent
