@@ -263,6 +263,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("every mention of money"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Pyramid Principle"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Remove any hashtags and fix the formatting"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Do not use Markdown heading symbols"))
     }
 
@@ -334,6 +335,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(prompt.contains("$1800 for 6 sessions"))
         XCTAssertTrue(prompt.contains("REQUIRED FINANCIAL EVIDENCE"))
+        XCTAssertTrue(prompt.contains("Remove any hashtags and fix the formatting"))
     }
 
     func testFormatterRemovesMarkdownHeadingHashesAndBoldMarkers() {
