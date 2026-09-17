@@ -396,7 +396,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         let draft = MeetingEmailDraft(
             recipients: ["one@example.com", "two@example.com"],
             subject: "Meeting notes: Pricing",
-            body: "KEY NUMBERS\n• $1800 for 6 sessions"
+            body: "KEY NUMBERS\n• $1800 for 6 sessions",
+            senderAccount: "sender@example.com"
         )
         let mailURL = try XCTUnwrap(
             MeetingEmailDraftURLBuilder.url(for: draft, client: .appleMail)
@@ -407,6 +408,10 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertEqual(
             mailComponents.queryItems?.first(where: { $0.name == "subject" })?.value,
             draft.subject
+        )
+        XCTAssertEqual(
+            mailComponents.queryItems?.first(where: { $0.name == "from" })?.value,
+            draft.senderAccount
         )
 
         let gmailURL = try XCTUnwrap(
@@ -422,6 +427,33 @@ final class MeetingNotesServiceTests: XCTestCase {
             gmailComponents.queryItems?.first(where: { $0.name == "body" })?.value,
             draft.body
         )
+        XCTAssertEqual(
+            gmailComponents.queryItems?.first(where: { $0.name == "authuser" })?.value,
+            draft.senderAccount
+        )
+    }
+
+    func testAvailableEmailClientsOnlyIncludesInstalledDesktopApps() {
+        XCTAssertEqual(
+            MeetingEmailClient.available(
+                installedBundleIdentifiers: ["com.apple.mail"],
+                hasWebBrowser: true
+            ),
+            [.appleMail, .gmail]
+        )
+        XCTAssertEqual(
+            MeetingEmailClient.available(
+                installedBundleIdentifiers: ["com.microsoft.Outlook"],
+                hasWebBrowser: false
+            ),
+            [.microsoftOutlook]
+        )
+    }
+
+    func testSenderAccountMustBeOneCompleteEmailAddress() {
+        XCTAssertTrue(MeetingEmailSenderAccount.isValid(" Sender@Example.com "))
+        XCTAssertFalse(MeetingEmailSenderAccount.isValid("sender"))
+        XCTAssertFalse(MeetingEmailSenderAccount.isValid("one@example.com two@example.com"))
     }
 
     func testRecognizesOpenAICreditLimit() {
