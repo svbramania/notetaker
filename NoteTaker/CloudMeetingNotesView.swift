@@ -18,6 +18,8 @@ struct CloudMeetingNotesView: View {
     @State private var generatedNotes = ""
     @State private var recipients: [MeetingEmailRecipient] = []
     @State private var selectedRecipientIDs: Set<String> = []
+    @State private var availableEmailClients: [MeetingEmailClient] = []
+    @State private var senderAccount = ""
     @State private var isGenerating = false
     @State private var status = "Add one or more API providers in the order they should be used."
 
@@ -43,6 +45,14 @@ struct CloudMeetingNotesView: View {
 
     private var selectedEmailClient: MeetingEmailClient? {
         MeetingEmailClient(rawValue: emailClientRawValue)
+    }
+
+    private var trimmedSenderAccount: String {
+        senderAccount.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasValidSenderAccount: Bool {
+        MeetingEmailSenderAccount.isValid(trimmedSenderAccount)
     }
 
     var body: some View {
@@ -166,27 +176,62 @@ struct CloudMeetingNotesView: View {
                         }
                     }
 
-                    HStack {
-                        Button("Save Edited Notes") { saveGeneratedNotes() }
-                        Spacer()
-                        Text("\(selectedEmails.count) recipients selected")
-                            .foregroundStyle(.secondary)
-                        Picker("Send with", selection: $emailClientRawValue) {
-                            Text("Choose email client").tag("")
-                            ForEach(MeetingEmailClient.allCases) { client in
-                                Text(client.rawValue).tag(client.rawValue)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Picker("Send with", selection: $emailClientRawValue) {
+                                Text("Choose an installed email client").tag("")
+                                ForEach(availableEmailClients) { client in
+                                    Text(client.rawValue).tag(client.rawValue)
+                                }
+                            }
+                            .frame(width: 310)
+
+                            Button("Refresh Installed Clients") {
+                                refreshAvailableEmailClients()
                             }
                         }
-                        .frame(width: 235)
-                        Button("Open Email Draft") { prepareEmail() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(selectedEmails.isEmpty || selectedEmailClient == nil)
+
+                        if availableEmailClients.isEmpty {
+                            Text("No supported email client or web browser was detected on this Mac.")
+                                .foregroundStyle(.red)
+                        }
+
+                        TextField("Sender account email address", text: $senderAccount)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(selectedEmailClient == nil)
+
+                        if !senderAccount.isEmpty && !hasValidSenderAccount {
+                            Text("Enter a complete email address for the sending account.")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+
+                        Text("Enter an account already configured in the selected email client. Gmail uses this address to choose the signed-in web account. Apple Mail and Outlook receive it as a sender hint; confirm the From account before sending.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Button("Save Edited Notes") { saveGeneratedNotes() }
+                            Spacer()
+                            Text("\(selectedEmails.count) recipients selected")
+                                .foregroundStyle(.secondary)
+                            Button("Open Email Draft") { prepareEmail() }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(
+                                    selectedEmails.isEmpty
+                                        || selectedEmailClient == nil
+                                        || !hasValidSenderAccount
+                                )
+                        }
                     }
                 }
             }
             .padding(6)
         }
-        .task { loadConfigurationsAndMigrateLegacyKeys() }
+        .task {
+            loadConfigurationsAndMigrateLegacyKeys()
+            refreshAvailableEmailClients()
+        }
         .onChange(of: newProvider) { _, provider in
             newModel = provider.defaultModel
         }
@@ -196,6 +241,12 @@ struct CloudMeetingNotesView: View {
                 from: recipients,
                 lastSelectedEmail: lastRecipientEmail
             )
+        }
+        .onChange(of: emailClientRawValue) { _, _ in
+            loadSenderAccount()
+        }
+        .onChange(of: senderAccount) { _, updatedAccount in
+            saveSenderAccount(updatedAccount)
         }
     }
 
@@ -381,13 +432,18 @@ struct CloudMeetingNotesView: View {
             status = "Choose Apple Mail, Microsoft Outlook, or Gmail first."
             return
         }
+        guard hasValidSenderAccount else {
+            status = "Enter a valid sender account email address."
+            return
+        }
         if selectedEmails.count == 1, let selectedEmail = selectedEmails.first {
             lastRecipientEmail = selectedEmail
         }
         let draft = MeetingEmailDraft(
             recipients: selectedEmails,
             subject: meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)",
-            body: generatedNotes
+            body: generatedNotes,
+            senderAccount: MeetingEmailSenderAccount.normalized(trimmedSenderAccount)
         )
         do {
             try MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
@@ -395,5 +451,34 @@ struct CloudMeetingNotesView: View {
         } catch {
             status = error.localizedDescription
         }
+    }
+
+    private func refreshAvailableEmailClients() {
+        availableEmailClients = MeetingEmailClient.installed()
+        guard let selectedEmailClient,
+              availableEmailClients.contains(selectedEmailClient) else {
+            emailClientRawValue = ""
+            senderAccount = ""
+            return
+        }
+        loadSenderAccount()
+    }
+
+    private func loadSenderAccount() {
+        guard let selectedEmailClient else {
+            senderAccount = ""
+            return
+        }
+        senderAccount = UserDefaults.standard.string(
+            forKey: selectedEmailClient.senderAccountDefaultsKey
+        ) ?? ""
+    }
+
+    private func saveSenderAccount(_ account: String) {
+        guard let selectedEmailClient else { return }
+        UserDefaults.standard.set(
+            account,
+            forKey: selectedEmailClient.senderAccountDefaultsKey
+        )
     }
 }

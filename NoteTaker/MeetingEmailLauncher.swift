@@ -18,12 +18,55 @@ enum MeetingEmailClient: String, CaseIterable, Identifiable {
             return nil
         }
     }
+
+    var senderAccountDefaultsKey: String {
+        "meetingEmailSenderAccount.\(id)"
+    }
+
+    static func available(
+        installedBundleIdentifiers: Set<String>,
+        hasWebBrowser: Bool
+    ) -> [MeetingEmailClient] {
+        allCases.filter { client in
+            if let bundleIdentifier = client.bundleIdentifier {
+                return installedBundleIdentifiers.contains(bundleIdentifier)
+            }
+            return hasWebBrowser
+        }
+    }
+
+    @MainActor
+    static func installed(using workspace: NSWorkspace = .shared) -> [MeetingEmailClient] {
+        let installedBundleIdentifiers = Set(
+            allCases.compactMap(\.bundleIdentifier).filter {
+                workspace.urlForApplication(withBundleIdentifier: $0) != nil
+            }
+        )
+        let gmailURL = URL(string: "https://mail.google.com/mail/")!
+        let hasWebBrowser = workspace.urlForApplication(toOpen: gmailURL) != nil
+        return available(
+            installedBundleIdentifiers: installedBundleIdentifiers,
+            hasWebBrowser: hasWebBrowser
+        )
+    }
 }
 
 struct MeetingEmailDraft: Equatable {
     let recipients: [String]
     let subject: String
     let body: String
+    let senderAccount: String
+}
+
+enum MeetingEmailSenderAccount {
+    static func normalized(_ account: String) -> String {
+        account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func isValid(_ account: String) -> Bool {
+        let normalizedAccount = normalized(account)
+        return EmailAddressExtractor.addresses(in: normalizedAccount) == [normalizedAccount]
+    }
 }
 
 enum RecipientSelectionPolicy {
@@ -64,7 +107,8 @@ enum MeetingEmailDraftURLBuilder {
             components.path = draft.recipients.joined(separator: ",")
             components.queryItems = [
                 URLQueryItem(name: "subject", value: draft.subject),
-                URLQueryItem(name: "body", value: draft.body)
+                URLQueryItem(name: "body", value: draft.body),
+                URLQueryItem(name: "from", value: draft.senderAccount)
             ]
             return components.url
         case .gmail:
@@ -72,6 +116,7 @@ enum MeetingEmailDraftURLBuilder {
             components?.queryItems = [
                 URLQueryItem(name: "view", value: "cm"),
                 URLQueryItem(name: "fs", value: "1"),
+                URLQueryItem(name: "authuser", value: draft.senderAccount),
                 URLQueryItem(name: "to", value: draft.recipients.joined(separator: ",")),
                 URLQueryItem(name: "su", value: draft.subject),
                 URLQueryItem(name: "body", value: draft.body)

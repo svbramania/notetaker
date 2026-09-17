@@ -26,7 +26,8 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Extracts attendee email addresses from calendar invitations and manually entered attendee details.
 - Provides an **Everyone** recipient checkbox plus an individual checkbox for every attendee email address.
 - Starts each new recipient list with only the last individually selected address checked; all other addresses remain unchecked.
-- Asks the user to choose Apple Mail, Microsoft Outlook, or Gmail in Browser, then opens the reviewed notes in that specific email client.
+- Detects the supported email clients available on the Mac and offers only Apple Mail, Microsoft Outlook, and Gmail in Browser when available.
+- Requires a valid sender-account email, remembers a separate account for each client, and then opens the reviewed notes in the selected client.
 - Sends content to ChatGPT only when the user pastes the prepared prompt into ChatGPT and submits it.
 - Reads upcoming events from calendars already synchronized with macOS Calendar.
 - Discovers calendars across multiple Gmail, Outlook, Exchange, iCloud, CalDAV, and local accounts connected to the Mac.
@@ -79,7 +80,7 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 12. Use **Summarize in ChatGPT** for the existing no-key handoff, or add one or more OpenAI/Claude API keys and arrange their numbered attempt order.
 13. Optionally enable automatic provider fallback for exhausted usage, credit, quota, or spend limits, then select **Generate Meeting Notes**.
 14. Select **Everyone** or individual attendee email checkboxes. On the next meeting, only the most recently selected individual address is preselected.
-15. Choose Apple Mail, Microsoft Outlook, or Gmail from **Send with**, then choose **Open Email Draft**.
+15. Choose one of the detected options under **Send with**, enter the sender account configured in that client, then choose **Open Email Draft**.
 16. Review the addressed draft in the selected email client and send it.
 
 ## ChatGPT summary output
@@ -107,7 +108,7 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 - The app does not automatically read Zoom, Teams, or Google Meet chat yet; chat can be pasted or typed into the app.
 - Speaker names are not inferred from voices. Mic is labeled `Mic`, system output is labeled `System`, and typed entries are labeled `Chat` or `Note`.
 - The ChatGPT handoff requires the user to paste and send the prepared prompt. The optional OpenAI and Claude integrations send the transcript directly after the user selects **Generate Meeting Notes**.
-- **Open Email Draft** requires the user to choose Apple Mail, Microsoft Outlook, or Gmail in Browser and opens that specific client for review and sending.
+- **Open Email Draft** requires a detected client and sender account. Gmail uses the address to select the signed-in web account. Apple Mail and Outlook receive the address as a sender hint, but the user should confirm the From account because desktop clients control final sender selection.
 - Calendar detection uses every selected calendar available through macOS Calendar, including multiple Google and Microsoft accounts.
 - Link-only calendar eligibility is the default. The optional no-link setting covers timed invitations with attendees.
 - Notifications are scheduled for detected meetings in the next 24 hours whenever NoteTaker is running. Scheduled alerts remain available after the app closes.
