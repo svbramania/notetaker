@@ -28,6 +28,8 @@ enum LocalScribeError: LocalizedError {
     case recognizerUnavailable
     case onDeviceRecognitionUnavailable
     case noSpeechDetected
+    case recognitionTimedOut
+    case audioPreparationTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -39,7 +41,216 @@ enum LocalScribeError: LocalizedError {
             return "On-device speech recognition is not available for this language on this Mac."
         case .noSpeechDetected:
             return "The recordings were saved, but Apple Speech did not find transcribable speech in either audio track."
+        case .recognitionTimedOut:
+            return "Apple Speech stopped responding to an audio chunk. The recording was preserved; retry transcription to continue."
+        case .audioPreparationTimedOut:
+            return "Preparing an audio chunk took too long. The recording was preserved; retry transcription to continue."
         }
+    }
+}
+
+struct TranscriptionProgress: Equatable {
+    let completedChunks: Int
+    let totalChunks: Int
+    let failedChunks: Int
+}
+
+private final class SpeechRecognitionOperation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var timeoutTask: Task<Void, Never>?
+    private var completed = false
+
+    init(_ continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>) {
+        self.continuation = continuation
+    }
+
+    func attach(_ task: SFSpeechRecognitionTask) {
+        lock.lock()
+        if completed {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        recognitionTask = task
+        lock.unlock()
+    }
+
+    func startTimeout(after seconds: TimeInterval) {
+        let timeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(seconds))
+            } catch {
+                return
+            }
+            self?.finish(.failure(LocalScribeError.recognitionTimedOut))
+        }
+        lock.lock()
+        if completed {
+            lock.unlock()
+            timeoutTask.cancel()
+            return
+        }
+        self.timeoutTask = timeoutTask
+        lock.unlock()
+    }
+
+    func finish(_ result: Result<SFSpeechRecognitionResult, Error>) {
+        lock.lock()
+        guard !completed, let continuation else {
+            lock.unlock()
+            return
+        }
+        completed = true
+        self.continuation = nil
+        let recognitionTask = self.recognitionTask
+        self.recognitionTask = nil
+        let timeoutTask = self.timeoutTask
+        self.timeoutTask = nil
+        lock.unlock()
+
+        timeoutTask?.cancel()
+        recognitionTask?.cancel()
+        continuation.resume(with: result)
+    }
+
+    func cancel() {
+        finish(.failure(CancellationError()))
+    }
+}
+
+private final class SpeechRecognitionOperationHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var operation: SpeechRecognitionOperation?
+    private var cancelled = false
+
+    func set(_ operation: SpeechRecognitionOperation) {
+        lock.lock()
+        if cancelled {
+            lock.unlock()
+            operation.cancel()
+            return
+        }
+        self.operation = operation
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let operation = self.operation
+        lock.unlock()
+        operation?.cancel()
+    }
+}
+
+private final class AudioExportOperation: @unchecked Sendable {
+    private let lock = NSLock()
+    private let exporter: AVAssetExportSession
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var timeoutTask: Task<Void, Never>?
+    private var completed = false
+
+    init(
+        exporter: AVAssetExportSession,
+        continuation: CheckedContinuation<Void, Error>
+    ) {
+        self.exporter = exporter
+        self.continuation = continuation
+    }
+
+    func start(timeout: TimeInterval) {
+        exporter.exportAsynchronously { [weak self] in
+            guard let self else { return }
+            switch self.exporter.status {
+            case .completed:
+                self.finish(nil)
+            case .failed, .cancelled:
+                self.finish(
+                    self.exporter.error ?? NSError(
+                        domain: "NoteTaker",
+                        code: 31,
+                        userInfo: [NSLocalizedDescriptionKey: "Could not create an audio transcription chunk."]
+                    )
+                )
+            default:
+                self.finish(
+                    NSError(
+                        domain: "NoteTaker",
+                        code: 32,
+                        userInfo: [NSLocalizedDescriptionKey: "Audio transcription preparation did not finish."]
+                    )
+                )
+            }
+        }
+        let timeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(timeout))
+            } catch {
+                return
+            }
+            self?.exporter.cancelExport()
+            self?.finish(LocalScribeError.audioPreparationTimedOut)
+        }
+        lock.lock()
+        if completed {
+            lock.unlock()
+            timeoutTask.cancel()
+        } else {
+            self.timeoutTask = timeoutTask
+            lock.unlock()
+        }
+    }
+
+    func cancel() {
+        exporter.cancelExport()
+        finish(CancellationError())
+    }
+
+    private func finish(_ error: Error?) {
+        lock.lock()
+        guard !completed, let continuation else {
+            lock.unlock()
+            return
+        }
+        completed = true
+        self.continuation = nil
+        let timeoutTask = self.timeoutTask
+        self.timeoutTask = nil
+        lock.unlock()
+
+        timeoutTask?.cancel()
+        if let error {
+            continuation.resume(throwing: error)
+        } else {
+            continuation.resume()
+        }
+    }
+}
+
+private final class AudioExportOperationHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var operation: AudioExportOperation?
+    private var cancelled = false
+
+    func set(_ operation: AudioExportOperation) {
+        lock.lock()
+        if cancelled {
+            lock.unlock()
+            operation.cancel()
+            return
+        }
+        self.operation = operation
+        lock.unlock()
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let operation = self.operation
+        lock.unlock()
+        operation?.cancel()
     }
 }
 
@@ -70,7 +281,12 @@ final class LocalScribe {
         guard status == .authorized else { throw LocalScribeError.speechPermissionDenied }
     }
 
-    func transcribeFile(_ url: URL, source: ScribeEntry.Source, meetingStart: Date) async throws -> [ScribeEntry] {
+    func transcribeFile(
+        _ url: URL,
+        source: ScribeEntry.Source,
+        meetingStart: Date,
+        progress: ((TranscriptionProgress) -> Void)? = nil
+    ) async throws -> [ScribeEntry] {
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
             throw LocalScribeError.recognizerUnavailable
         }
@@ -88,21 +304,47 @@ final class LocalScribe {
         var entries: [ScribeEntry] = []
         var firstRecognitionError: Error?
 
-        for chunk in prepared.chunks {
-            do {
-                let chunkEntries = try await transcribeSingleFile(
-                    chunk.url,
-                    recognizer: recognizer,
-                    source: source,
-                    meetingStart: meetingStart.addingTimeInterval(chunk.offset)
-                )
-                entries.append(contentsOf: chunkEntries)
-            } catch {
-                if isNoSpeechError(error) {
-                    continue
+        var failedChunks = 0
+        for (index, chunk) in prepared.chunks.enumerated() {
+            try Task.checkCancellation()
+            var finalChunkError: Error?
+
+            for attempt in 1...2 {
+                do {
+                    let chunkEntries = try await transcribeSingleFile(
+                        chunk.url,
+                        recognizer: recognizer,
+                        source: source,
+                        meetingStart: meetingStart.addingTimeInterval(chunk.offset)
+                    )
+                    entries.append(contentsOf: chunkEntries)
+                    finalChunkError = nil
+                    break
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    if isNoSpeechError(error) {
+                        finalChunkError = nil
+                        break
+                    }
+                    finalChunkError = error
+                    if attempt < 2 {
+                        continue
+                    }
                 }
-                firstRecognitionError = firstRecognitionError ?? error
             }
+
+            if let finalChunkError {
+                failedChunks += 1
+                firstRecognitionError = firstRecognitionError ?? finalChunkError
+            }
+            progress?(
+                TranscriptionProgress(
+                    completedChunks: index + 1,
+                    totalChunks: prepared.chunks.count,
+                    failedChunks: failedChunks
+                )
+            )
         }
 
         if entries.isEmpty, let firstRecognitionError {
@@ -142,10 +384,16 @@ final class LocalScribe {
     func transcribeFileAllowingSilence(
         _ url: URL,
         source: ScribeEntry.Source,
-        meetingStart: Date
+        meetingStart: Date,
+        progress: ((TranscriptionProgress) -> Void)? = nil
     ) async throws -> [ScribeEntry] {
         do {
-            return try await transcribeFile(url, source: source, meetingStart: meetingStart)
+            return try await transcribeFile(
+                url,
+                source: source,
+                meetingStart: meetingStart,
+                progress: progress
+            )
         } catch {
             if isNoSpeechError(error) {
                 return []
@@ -204,6 +452,7 @@ final class LocalScribe {
             var index = 0
 
             while offset < duration {
+                try Task.checkCancellation()
                 let chunkDuration = min(maximumRecognitionDuration, duration - offset)
                 let chunkURL = directory.appendingPathComponent(
                     String(format: "chunk-%04d.m4a", index)
@@ -214,6 +463,7 @@ final class LocalScribe {
                     duration: chunkDuration,
                     destination: chunkURL
                 )
+                try Task.checkCancellation()
                 chunks.append(AudioChunk(url: chunkURL, offset: offset))
                 offset += chunkDuration
                 index += 1
@@ -250,29 +500,18 @@ final class LocalScribe {
             duration: CMTime(seconds: duration, preferredTimescale: 600)
         )
 
-        try await withCheckedThrowingContinuation { continuation in
-            exporter.exportAsynchronously {
-                switch exporter.status {
-                case .completed:
-                    continuation.resume()
-                case .failed, .cancelled:
-                    continuation.resume(
-                        throwing: exporter.error ?? NSError(
-                            domain: "NoteTaker",
-                            code: 31,
-                            userInfo: [NSLocalizedDescriptionKey: "Could not create an audio transcription chunk."]
-                        )
-                    )
-                default:
-                    continuation.resume(
-                        throwing: NSError(
-                            domain: "NoteTaker",
-                            code: 32,
-                            userInfo: [NSLocalizedDescriptionKey: "Audio transcription preparation did not finish."]
-                        )
-                    )
-                }
+        let holder = AudioExportOperationHolder()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let operation = AudioExportOperation(
+                    exporter: exporter,
+                    continuation: continuation
+                )
+                holder.set(operation)
+                operation.start(timeout: 60)
             }
+        } onCancel: {
+            holder.cancel()
         }
     }
 
@@ -294,19 +533,25 @@ final class LocalScribe {
     }
 
     private func recognize(recognizer: SFSpeechRecognizer, request: SFSpeechRecognitionRequest) async throws -> SFSpeechRecognitionResult {
-        try await withCheckedThrowingContinuation { continuation in
-            var task: SFSpeechRecognitionTask?
-            task = recognizer.recognitionTask(with: request) { result, error in
-                if let error {
-                    task?.cancel()
-                    continuation.resume(throwing: error)
-                    return
+        let holder = SpeechRecognitionOperationHolder()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let operation = SpeechRecognitionOperation(continuation)
+                holder.set(operation)
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    if let error {
+                        operation.finish(.failure(error))
+                        return
+                    }
+                    if let result, result.isFinal {
+                        operation.finish(.success(result))
+                    }
                 }
-                if let result, result.isFinal {
-                    task?.cancel()
-                    continuation.resume(returning: result)
-                }
+                operation.attach(task)
+                operation.startTimeout(after: 90)
             }
+        } onCancel: {
+            holder.cancel()
         }
     }
 
