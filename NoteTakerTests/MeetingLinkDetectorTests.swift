@@ -222,6 +222,51 @@ final class RecordingFolderNamerTests: XCTestCase {
     }
 }
 
+final class SavedMeetingSessionTests: XCTestCase {
+    func testSavedMeetingsAreSortedNewestFirst() {
+        let older = SavedMeetingSession(
+            directoryURL: URL(fileURLWithPath: "/tmp/Older - 2026-01-01T10-00-00.000Z"),
+            title: "Older",
+            startedAt: Date(timeIntervalSince1970: 100),
+            updatedAt: Date(timeIntervalSince1970: 200),
+            hasMicrophoneAudio: true,
+            hasSystemAudio: true
+        )
+        let newer = SavedMeetingSession(
+            directoryURL: URL(fileURLWithPath: "/tmp/Newer - 2026-01-02T10-00-00.000Z"),
+            title: "Newer",
+            startedAt: Date(timeIntervalSince1970: 300),
+            updatedAt: Date(timeIntervalSince1970: 400),
+            hasMicrophoneAudio: true,
+            hasSystemAudio: false
+        )
+
+        XCTAssertEqual(
+            SavedMeetingSession.sortedNewestFirst([older, newer]).map(\.title),
+            ["Newer", "Older"]
+        )
+    }
+
+    func testDiscoversRecordingFolderAndExtractsCalendarTitle() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NoteTakerTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let meeting = root.appendingPathComponent(
+            "Client Planning - 2026-09-18T10-30-00.000Z",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: meeting, withIntermediateDirectories: true)
+        try Data("audio".utf8).write(to: meeting.appendingPathComponent("microphone.m4a"))
+
+        let sessions = SavedMeetingSession.discover(in: root)
+
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertEqual(sessions.first?.title, "Client Planning")
+        XCTAssertEqual(sessions.first?.hasMicrophoneAudio, true)
+        XCTAssertEqual(sessions.first?.hasSystemAudio, false)
+    }
+}
+
 final class MeetingNotesServiceTests: XCTestCase {
     func testExtractsAndDeduplicatesEmailAddresses() {
         XCTAssertEqual(

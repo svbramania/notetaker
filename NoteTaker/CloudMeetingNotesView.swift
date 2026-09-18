@@ -6,6 +6,7 @@ struct CloudMeetingNotesView: View {
     let meetingTitle: String
     let sessionDirectory: URL?
     let suggestedRecipients: [MeetingEmailRecipient]
+    let autoGenerateRequestID: UUID?
 
     @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
     @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
@@ -228,9 +229,18 @@ struct CloudMeetingNotesView: View {
             }
             .padding(6)
         }
-        .task {
+        .task(id: autoGenerateRequestID) {
             loadConfigurationsAndMigrateLegacyKeys()
             refreshAvailableEmailClients()
+            guard autoGenerateRequestID != nil,
+                  !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+            guard !configurations.isEmpty else {
+                status = "Transcript saved. Add an API key to generate notes automatically, or use the no-key ChatGPT handoff."
+                return
+            }
+            await generateNotes()
         }
         .onChange(of: newProvider) { _, provider in
             newModel = provider.defaultModel

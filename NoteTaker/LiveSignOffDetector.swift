@@ -35,9 +35,9 @@ enum SignOffPhraseDetector {
     }
 }
 
-@MainActor
-final class LiveSignOffDetector {
+final class LiveSignOffDetector: @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer?
+    private let queue = DispatchQueue(label: "com.agilemindset.notetaker.signoff-speech")
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var isRunning = false
@@ -49,29 +49,37 @@ final class LiveSignOffDetector {
     }
 
     func start(onTranscriptUpdate: @escaping (String) -> Void) {
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized,
-              let recognizer,
-              recognizer.isAvailable,
-              recognizer.supportsOnDeviceRecognition else { return }
+        queue.async { [weak self] in
+            guard let self,
+                  SFSpeechRecognizer.authorizationStatus() == .authorized,
+                  let recognizer = self.recognizer,
+                  recognizer.isAvailable,
+                  recognizer.supportsOnDeviceRecognition else { return }
 
-        self.onTranscriptUpdate = onTranscriptUpdate
-        isRunning = true
-        beginRecognition()
+            self.onTranscriptUpdate = onTranscriptUpdate
+            self.isRunning = true
+            self.beginRecognition()
+        }
     }
 
     func append(_ sampleBuffer: CMSampleBuffer) {
-        guard isRunning else { return }
-        request?.appendAudioSampleBuffer(sampleBuffer)
+        queue.async { [weak self] in
+            guard let self, self.isRunning else { return }
+            self.request?.appendAudioSampleBuffer(sampleBuffer)
+        }
     }
 
     func stop() {
-        isRunning = false
-        recognitionGeneration += 1
-        request?.endAudio()
-        task?.cancel()
-        request = nil
-        task = nil
-        onTranscriptUpdate = nil
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.isRunning = false
+            self.recognitionGeneration += 1
+            self.request?.endAudio()
+            self.task?.cancel()
+            self.request = nil
+            self.task = nil
+            self.onTranscriptUpdate = nil
+        }
     }
 
     private func beginRecognition() {
@@ -92,24 +100,25 @@ final class LiveSignOffDetector {
         self.request = request
 
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            if let transcript = result?.bestTranscription.formattedString {
-                Task { @MainActor [weak self] in
-                    guard let self,
-                          self.isRunning,
-                          self.recognitionGeneration == generation else { return }
-                    self.onTranscriptUpdate?(transcript)
-                }
-            }
+            self?.queue.async { [weak self] in
+                guard let self,
+                      self.isRunning,
+                      self.recognitionGeneration == generation else { return }
 
-            if error != nil || result?.isFinal == true {
-                Task { @MainActor [weak self] in
-                    guard let self,
-                          self.isRunning,
-                          self.recognitionGeneration == generation else { return }
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard self.isRunning,
-                          self.recognitionGeneration == generation else { return }
-                    self.beginRecognition()
+                if let transcript = result?.bestTranscription.formattedString,
+                   let onTranscriptUpdate = self.onTranscriptUpdate {
+                    Task { @MainActor in
+                        onTranscriptUpdate(transcript)
+                    }
+                }
+
+                if error != nil || result?.isFinal == true {
+                    self.queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        guard let self,
+                              self.isRunning,
+                              self.recognitionGeneration == generation else { return }
+                        self.beginRecognition()
+                    }
                 }
             }
         }

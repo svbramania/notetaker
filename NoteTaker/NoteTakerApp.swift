@@ -33,6 +33,11 @@ struct ContentView: View {
     @State private var showsCalendarSelection = false
     @State private var calendarEmailRecipients: [MeetingEmailRecipient] = []
     @State private var signOffStopTask: Task<Void, Never>?
+    @State private var transcriptionTask: Task<Void, Never>?
+    @State private var transcriptionTaskID: UUID?
+    @State private var savedMeetings: [SavedMeetingSession] = []
+    @State private var selectedSavedMeetingID = ""
+    @State private var autoGenerateNotesRequestID: UUID?
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
     @AppStorage("autoStopOnSpokenSignOff") private var autoStopOnSpokenSignOff = true
 
@@ -59,28 +64,55 @@ struct ContentView: View {
 
             recordingPermissionSection
 
-            HStack(spacing: 12) {
-                Button {
-                    Task { await toggleRecording(clearCalendarRecipients: true) }
-                } label: {
-                    Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isProcessing)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await toggleRecording(clearCalendarRecipients: true) }
+                    } label: {
+                        Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isProcessing)
 
-                Button("Build Transcript") {
-                    Task { await buildTranscript() }
+                    if isProcessing { ProgressView().controlSize(.small) }
+                    Text(recorder.status).foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
 
-                Button("Summarize in ChatGPT") {
-                    openInChatGPT()
+                HStack(spacing: 12) {
+                    Picker("Saved meeting", selection: $selectedSavedMeetingID) {
+                        if savedMeetings.isEmpty {
+                            Text("No saved meetings").tag("")
+                        } else {
+                            ForEach(savedMeetings) { meeting in
+                                Text(meeting.displayName).tag(meeting.id)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: 430)
+                    .disabled(recorder.isRecording || isProcessing || savedMeetings.isEmpty)
+
+                    Button("Refresh") {
+                        refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty)
+                    }
+                    .disabled(recorder.isRecording || isProcessing)
+
+                    Button("Transcribe Meeting") {
+                        Task { await startTranscriptBuild() }
+                    }
+                    .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
+
+                    if isProcessing {
+                        Button("Cancel Transcription") {
+                            transcriptionTask?.cancel()
+                        }
+                    }
+
+                    Button("Summarize in ChatGPT") {
+                        openInChatGPT()
+                    }
+                    .disabled(recorder.isRecording || isProcessing || report.isEmpty)
                 }
-                .disabled(recorder.isRecording || isProcessing || report.isEmpty)
-
-                if isProcessing { ProgressView().controlSize(.small) }
-                Spacer()
-                Text(recorder.status).foregroundStyle(.secondary)
             }
 
             GroupBox("Meeting chat / typed notes") {
@@ -123,7 +155,7 @@ struct ContentView: View {
 
             GroupBox("Meeting transcript") {
                 ScrollView {
-                    Text(report.isEmpty ? "After the meeting, choose Build Transcript. Spoken audio and typed meeting content will be combined into one local, timestamped transcript." : report)
+                    Text(report.isEmpty ? "After the meeting, choose Transcribe Meeting. Spoken audio and typed meeting content will be combined into one local, timestamped transcript." : report)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                         .padding(8)
@@ -135,7 +167,8 @@ struct ContentView: View {
                 transcript: report,
                 meetingTitle: title,
                 sessionDirectory: recorder.sessionDirectory,
-                suggestedRecipients: suggestedEmailRecipients
+                suggestedRecipients: suggestedEmailRecipients,
+                autoGenerateRequestID: autoGenerateNotesRequestID
             )
             .id(recorder.sessionDirectory?.path ?? "meeting-notes-configuration")
 
@@ -151,6 +184,7 @@ struct ContentView: View {
         }
         .task {
             calendarMonitor.start()
+            refreshSavedMeetings(selectMostRecent: true)
         }
         .onChange(of: calendarMonitor.activeMeeting, initial: true) { _, _ in
             Task { await synchronizeCalendarRecording() }
@@ -166,8 +200,12 @@ struct ContentView: View {
             signOffStopTask = nil
             recorder.setSignOffDetectionEnabled(enabled)
         }
+        .onChange(of: selectedSavedMeetingID) { _, meetingID in
+            loadSavedMeeting(withID: meetingID)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recordingPermissions.refresh()
+            refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty)
             Task {
                 await calendarMonitor.refresh()
                 await synchronizeCalendarRecording()
@@ -395,6 +433,7 @@ struct ContentView: View {
                     folderTitle: title,
                     detectSignOffPhrases: autoStopOnSpokenSignOff
                 )
+                refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -457,6 +496,7 @@ struct ContentView: View {
                 folderTitle: activeMeeting.title,
                 detectSignOffPhrases: autoStopOnSpokenSignOff
             )
+            refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
             autoRecordedMeetingID = activeMeeting.id
             recorder.status = "Auto-recording until \(meetingTime(activeMeeting.endDate))"
         } catch {
@@ -512,7 +552,8 @@ struct ContentView: View {
         await recorder.stop()
         endedAt = Date()
         recorder.status = status
-        await buildTranscript()
+        refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
+        await startTranscriptBuild()
     }
 
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
@@ -530,10 +571,25 @@ struct ContentView: View {
         typedEntry = ""
     }
 
+    private func startTranscriptBuild() async {
+        guard transcriptionTask == nil else { return }
+        let taskID = UUID()
+        transcriptionTaskID = taskID
+        let task = Task { await buildTranscript() }
+        transcriptionTask = task
+        await task.value
+        if transcriptionTaskID == taskID {
+            transcriptionTask = nil
+            transcriptionTaskID = nil
+        }
+    }
+
     private func buildTranscript() async {
-        guard let mic = recorder.microphoneURL,
-              let system = recorder.systemAudioURL,
-              let start = startedAt else { return }
+        guard let start = startedAt,
+              recorder.microphoneURL != nil || recorder.systemAudioURL != nil else {
+            errorMessage = "The selected meeting does not contain a microphone or system-audio recording."
+            return
+        }
 
         errorMessage = nil
         isProcessing = true
@@ -543,30 +599,52 @@ struct ContentView: View {
             try await scribe.requestAuthorization()
             var transcriptionErrors: [Error] = []
 
-            recorder.status = "Transcribing microphone audio..."
             let micEntries: [ScribeEntry]
-            do {
-                micEntries = try await scribe.transcribeFileAllowingSilence(
-                    mic,
-                    source: .microphone,
-                    meetingStart: start
-                )
-            } catch {
+            if let mic = recorder.microphoneURL {
+                recorder.status = "Preparing microphone transcription..."
+                do {
+                    micEntries = try await scribe.transcribeFileAllowingSilence(
+                        mic,
+                        source: .microphone,
+                        meetingStart: start
+                    ) { progress in
+                        recorder.status = transcriptionStatus(
+                            track: "microphone",
+                            progress: progress
+                        )
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    micEntries = []
+                    transcriptionErrors.append(error)
+                }
+            } else {
                 micEntries = []
-                transcriptionErrors.append(error)
             }
 
-            recorder.status = "Transcribing system audio..."
             let systemEntries: [ScribeEntry]
-            do {
-                systemEntries = try await scribe.transcribeFileAllowingSilence(
-                    system,
-                    source: .systemAudio,
-                    meetingStart: start
-                )
-            } catch {
+            if let system = recorder.systemAudioURL {
+                recorder.status = "Preparing system-audio transcription..."
+                do {
+                    systemEntries = try await scribe.transcribeFileAllowingSilence(
+                        system,
+                        source: .systemAudio,
+                        meetingStart: start
+                    ) { progress in
+                        recorder.status = transcriptionStatus(
+                            track: "system audio",
+                            progress: progress
+                        )
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    systemEntries = []
+                    transcriptionErrors.append(error)
+                }
+            } else {
                 systemEntries = []
-                transcriptionErrors.append(error)
             }
 
             let spoken = scribe.mergeSpokenEntries(
@@ -576,7 +654,8 @@ struct ContentView: View {
             if spoken.isEmpty && entries.isEmpty {
                 throw transcriptionErrors.first ?? LocalScribeError.noSpeechDetected
             }
-            let allEntries = (entries + spoken).sorted { $0.timestamp < $1.timestamp }
+            let typedEntries = entries.filter { $0.source == .chat || $0.source == .note }
+            let allEntries = (typedEntries + spoken).sorted { $0.timestamp < $1.timestamp }
             entries = allEntries
 
             let names = attendees.split(separator: ",")
@@ -593,10 +672,70 @@ struct ContentView: View {
             report = built
             try save(report: built, entries: allEntries)
             recorder.status = transcriptionErrors.isEmpty
-                ? "Transcript saved — ready for ChatGPT"
-                : "Transcript saved from the available audio track — ready for ChatGPT"
+                ? "Transcript saved — generating formatted meeting notes"
+                : "Partial transcript saved — generating formatted meeting notes"
+            autoGenerateNotesRequestID = UUID()
+            refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
+        } catch is CancellationError {
+            recorder.status = "Transcription cancelled — recordings preserved for retry"
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func transcriptionStatus(
+        track: String,
+        progress: TranscriptionProgress
+    ) -> String {
+        let failures = progress.failedChunks == 0
+            ? ""
+            : " • \(progress.failedChunks) retried/failed"
+        return "Transcribing \(track): chunk \(progress.completedChunks) of \(progress.totalChunks)\(failures)"
+    }
+
+    private func refreshSavedMeetings(
+        selectMostRecent: Bool = false,
+        preferredDirectory: URL? = nil
+    ) {
+        savedMeetings = MeetingRecorder.savedSessions()
+        let preferredID = preferredDirectory?.path
+        let retainedID = savedMeetings.contains { $0.id == selectedSavedMeetingID }
+            ? selectedSavedMeetingID
+            : nil
+        let selection = preferredID.flatMap { id in
+            savedMeetings.first(where: { $0.id == id })?.id
+        } ?? (selectMostRecent ? savedMeetings.first?.id : retainedID ?? savedMeetings.first?.id)
+
+        selectedSavedMeetingID = selection ?? ""
+        if !recorder.isRecording,
+           recorder.sessionDirectory?.path != selectedSavedMeetingID {
+            loadSavedMeeting(withID: selectedSavedMeetingID)
+        }
+    }
+
+    private func loadSavedMeeting(withID meetingID: String) {
+        guard !meetingID.isEmpty,
+              !recorder.isRecording,
+              !isProcessing,
+              let meeting = savedMeetings.first(where: { $0.id == meetingID }) else { return }
+
+        recorder.selectSavedSession(meeting)
+        title = meeting.title
+        startedAt = meeting.startedAt
+        endedAt = meeting.updatedAt
+        calendarEmailRecipients = []
+        errorMessage = nil
+        autoGenerateNotesRequestID = nil
+
+        let transcriptURL = meeting.directoryURL.appendingPathComponent("meeting-transcript.md")
+        report = (try? String(contentsOf: transcriptURL, encoding: .utf8)) ?? ""
+
+        let entriesURL = meeting.directoryURL.appendingPathComponent("transcript.json")
+        if let data = try? Data(contentsOf: entriesURL),
+           let restoredEntries = try? JSONDecoder().decode([ScribeEntry].self, from: data) {
+            entries = restoredEntries
+        } else {
+            entries = []
         }
     }
 
