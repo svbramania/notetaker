@@ -60,7 +60,7 @@ struct SavedMeetingSession: Identifiable, Hashable {
             options: [.skipsHiddenFiles]
         ) else { return [] }
 
-        let sessions = directories.compactMap { directory in
+        let sessions: [SavedMeetingSession] = directories.compactMap { directory -> SavedMeetingSession? in
             guard let values = try? directory.resourceValues(forKeys: resourceKeys),
                   values.isDirectory == true else { return nil }
             let microphoneURL = directory.appendingPathComponent("microphone.m4a")
@@ -159,24 +159,11 @@ private final class RecordingAudioTrackWriter: @unchecked Sendable {
     }
 
     func finish(timeout: TimeInterval = 15) async throws {
-        lock.lock()
-        guard !isFinishing else {
-            lock.unlock()
-            return
-        }
-        isFinishing = true
-        if writer.status == .writing {
-            input.markAsFinished()
-        }
-        let shouldFinish = writer.status == .writing
-        lock.unlock()
+        let shouldFinish = try prepareForFinish()
 
-        guard shouldFinish else {
-            if writer.status == .failed, let error = writer.error { throw error }
-            return
-        }
+        guard shouldFinish else { return }
 
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let completionLock = NSLock()
             var completed = false
             var timeoutWorkItem: DispatchWorkItem?
@@ -210,6 +197,26 @@ private final class RecordingAudioTrackWriter: @unchecked Sendable {
                 execute: workItem
             )
         }
+    }
+
+    private func prepareForFinish() throws -> Bool {
+        lock.lock()
+        guard !isFinishing else {
+            lock.unlock()
+            return false
+        }
+        isFinishing = true
+        if writer.status == .writing {
+            input.markAsFinished()
+        }
+        let shouldFinish = writer.status == .writing
+        lock.unlock()
+
+        guard shouldFinish else {
+            if writer.status == .failed, let error = writer.error { throw error }
+            return false
+        }
+        return true
     }
 }
 
@@ -250,16 +257,21 @@ private final class RecordingAudioPipeline: @unchecked Sendable {
     }
 
     func finish() async throws {
+        let (system, microphone) = takeWriters()
+
+        async let systemFinish: Void = finish(system)
+        async let microphoneFinish: Void = finish(microphone)
+        _ = try await (systemFinish, microphoneFinish)
+    }
+
+    private func takeWriters() -> (RecordingAudioTrackWriter?, RecordingAudioTrackWriter?) {
         lock.lock()
         let system = systemWriter
         let microphone = microphoneWriter
         systemWriter = nil
         microphoneWriter = nil
         lock.unlock()
-
-        async let systemFinish: Void = finish(system)
-        async let microphoneFinish: Void = finish(microphone)
-        _ = try await (systemFinish, microphoneFinish)
+        return (system, microphone)
     }
 
     private func finish(_ writer: RecordingAudioTrackWriter?) async throws {
