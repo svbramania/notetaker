@@ -306,7 +306,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Owner"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Due Date"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("FINANCIAL TERMS AND AMOUNTS"))
-        XCTAssertTrue(MeetingNotesService.instructions.contains("every mention of money"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("monetary amount"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Pyramid Principle"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Remove any hashtags and fix the formatting"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Do not use Markdown heading symbols"))
@@ -337,7 +337,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         A deposit is due next week.
         """
 
-        XCTAssertEqual(FinancialMentionExtractor.evidenceLines(in: transcript).count, 2)
+        XCTAssertEqual(FinancialMentionExtractor.evidenceLines(in: transcript).count, 1)
     }
 
     func testSessionCountAloneIsNotClassifiedAsMoney() {
@@ -402,9 +402,20 @@ final class MeetingNotesServiceTests: XCTestCase {
 
         XCTAssertTrue(
             formatted.hasPrefix(
-                "KEY NUMBERS\n• The total is $1800 for 6 sessions."
+                "KEY FINANCIAL AMOUNTS\n• The total is $1800 for 6 sessions."
             )
         )
+    }
+
+    func testFormatterOmitsTopSectionWhenNoMoneyWasMentioned() {
+        let formatted = MeetingNotesFormatter.finalize(
+            "MEETING NOTES\nEXECUTIVE SUMMARY\nSix people attended.\n\nFINANCIAL TERMS AND AMOUNTS\nNone stated.\n\nKEY DISCUSSION POINTS\nPlanning.",
+            transcript: "Six people attended for 30 minutes."
+        )
+
+        XCTAssertFalse(formatted.contains("KEY FINANCIAL AMOUNTS"))
+        XCTAssertFalse(formatted.contains("FINANCIAL TERMS AND AMOUNTS"))
+        XCTAssertTrue(formatted.hasPrefix("MEETING NOTES"))
     }
 
     func testNumericEvidenceIgnoresTimestampButKeepsContentNumbers() {

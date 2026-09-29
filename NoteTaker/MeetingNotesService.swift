@@ -224,7 +224,7 @@ enum APIFallbackPolicy {
 }
 
 enum FinancialMentionExtractor {
-    private static let pattern = #"(?:[$€£¥₹]\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b(?:USD|EUR|GBP|CAD|AUD|INR)\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b\d[\d,]*(?:\.\d{1,2})?\s?(?:dollars?|euros?|pounds?|rupees?|cents?)\b)|(?:\b(?:dollars?|euros?|pounds?|rupees?|cents?|price|pricing|costs?|fees?|budgets?|rates?|payments?|revenue|deposit|invoice|salary|compensation|expenses?|money)\b)"#
+    private static let pattern = #"(?:[$€£¥₹]\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b(?:USD|EUR|GBP|CAD|AUD|INR)\s?\d[\d,]*(?:\.\d{1,2})?)|(?:\b\d[\d,]*(?:\.\d{1,2})?\s?(?:dollars?|euros?|pounds?|rupees?|cents?)\b)|(?:\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[ -](?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))*\s+(?:dollars?|euros?|pounds?|rupees?|cents?)\b)"#
 
     static func evidenceLines(in transcript: String) -> [String] {
         guard let expression = try? NSRegularExpression(
@@ -314,10 +314,10 @@ enum NumericMentionExtractor {
 
 enum MeetingNotesFormatter {
     static func finalize(_ generatedNotes: String, transcript: String) -> String {
-        var notes = FinancialMentionExtractor.ensuringEvidence(
-            in: generatedNotes,
-            from: transcript
-        )
+        let financialEvidence = FinancialMentionExtractor.evidenceLines(in: transcript)
+        var notes = financialEvidence.isEmpty
+            ? removingSection(named: "FINANCIAL TERMS AND AMOUNTS", from: generatedNotes)
+            : FinancialMentionExtractor.ensuringEvidence(in: generatedNotes, from: transcript)
         notes = notes.replacingOccurrences(
             of: #"(?m)^\s*#{1,6}\s*"#,
             with: "",
@@ -331,13 +331,32 @@ enum MeetingNotesFormatter {
         )
         notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let numericEvidence = NumericMentionExtractor.evidenceLines(in: transcript)
-        guard !numericEvidence.isEmpty else { return notes }
+        guard !financialEvidence.isEmpty else { return notes }
 
-        let keyNumbers = numericEvidence
+        let keyNumbers = financialEvidence
+            .map(cleanTranscriptPrefix)
             .map { "• \($0)" }
             .joined(separator: "\n")
-        return "KEY NUMBERS\n\(keyNumbers)\n\n\(notes)"
+        return "KEY FINANCIAL AMOUNTS\n\(keyNumbers)\n\n\(notes)"
+    }
+
+    private static func cleanTranscriptPrefix(_ line: String) -> String {
+        line.replacingOccurrences(
+            of: #"^\s*-?\s*\[\d{1,2}:\d{2}(?::\d{2})?\]\s*(?:\*\*)?[^:]+:(?:\*\*)?\s*"#,
+            with: "",
+            options: .regularExpression
+        )
+        .replacingOccurrences(of: "**", with: "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func removingSection(named heading: String, from notes: String) -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: heading)
+        return notes.replacingOccurrences(
+            of: "(?ims)^\\s*#*\\s*\(escaped)\\s*\\n.*?(?=^\\s*#*\\s*[A-Z][A-Z ,/&-]{2,}\\s*$|\\z)",
+            with: "",
+            options: .regularExpression
+        )
     }
 }
 
@@ -375,12 +394,12 @@ struct MeetingNotesService {
 
     MEETING NOTES
     EXECUTIVE SUMMARY
-    Apply the Pyramid Principle: begin with the most important conclusion or outcome, then give the strongest supporting facts. Mention all material numbers, amounts, dates, percentages, quantities, and durations at the beginning of this section. NoteTaker separately inserts a verified KEY NUMBERS block, so do not create another Key Numbers section.
+    Apply the Pyramid Principle: begin with the most important conclusion or outcome, then give the strongest supporting facts. Do not create a Key Numbers section. NoteTaker separately inserts a verified KEY FINANCIAL AMOUNTS block only when the transcript contains a monetary amount.
     DECISIONS MADE
     ACTION ITEMS
     Format each action as a numbered line containing Action, Owner, Due Date, and Status. Write “Not stated” where an owner or date is absent.
     FINANCIAL TERMS AND AMOUNTS
-    Capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments. Preserve the exact amount, currency, quantity, unit, timing, conditions, and surrounding context. If no monetary information was stated, write “None stated.”
+    Include this section only when the transcript contains a monetary amount. Preserve the exact amount, currency, quantity, unit, timing, conditions, and surrounding context. When no monetary amount was stated, omit this section entirely.
     KEY DISCUSSION POINTS
     OPEN QUESTIONS, RISKS, AND DEPENDENCIES
     ATTENDEES AND MEETING DETAILS

@@ -670,11 +670,11 @@ final class LocalScribe {
         return """
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
-        Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Start with KEY NUMBERS and include every material number, amount, date, percentage, quantity, and duration. Then use this structure:
+        Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Start with KEY FINANCIAL AMOUNTS only when a monetary amount appears in the transcript. If there is no monetary amount, omit that section entirely and begin with the executive summary. Do not promote dates, counts, percentages, quantities, or durations to the top merely because they are numbers. Then use this structure:
         1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts
         2. DECISIONS MADE
         3. ACTION ITEMS — format each action as a numbered line with owner, due date, and status; write "Not stated" when an owner or date is absent
-        4. FINANCIAL TERMS AND AMOUNTS — capture every mention of money, pricing, fees, budgets, rates, discounts, payments, costs, revenue, and financial commitments, preserving the exact amount, currency, quantity, unit, timing, conditions, and context
+        4. FINANCIAL TERMS AND AMOUNTS — include only when a monetary amount was stated; preserve the exact amount, currency, quantity, unit, timing, conditions, and context
         5. KEY DISCUSSION POINTS
         6. OPEN QUESTIONS, RISKS, AND DEPENDENCIES
         7. ATTENDEES AND MEETING DETAILS
@@ -685,8 +685,8 @@ final class LocalScribe {
         Include every applicable line below in the financial section:
         \(financialEvidenceText)
 
-        REQUIRED NUMERIC EVIDENCE
-        Place every applicable line below at the start under KEY NUMBERS and use it in the executive summary where material:
+        NUMERIC CONTEXT
+        Keep applicable numbers accurate in their relevant sections, but do not create a top numbers section unless REQUIRED FINANCIAL EVIDENCE contains a monetary amount:
         \(numericEvidenceText)
 
         --- TRANSCRIPT START ---

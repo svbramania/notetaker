@@ -20,7 +20,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Accepts multiple OpenAI and Claude API keys, stores each independently in macOS Keychain with device-only unlocked access, and lets the user arrange their attempt order.
 - Provides an opt-in fallback that tries the next configured provider only when the current provider reports an exhausted credit, quota, usage, or spend limit.
 - Generates clean, editable, email-ready plain-text notes without Markdown heading clutter.
-- Places every transcript-supported number, amount, date, percentage, quantity, and duration in a verified **KEY NUMBERS** block at the top, then applies the Pyramid Principle to the executive summary.
+- Places a verified **KEY FINANCIAL AMOUNTS** block at the top only when the transcript contains an actual monetary amount. Meetings without money omit the block entirely; other numbers remain in their relevant sections.
 - Includes decisions, action items, owners, due dates, discussion points, risks, open questions, and meeting details.
 - Gives Apple Speech financial vocabulary hints, detects monetary references deterministically, requires every amount and its context in the generated notes, and inserts exact transcript evidence when needed—for example, `$1800 for 6 sessions`.
 - Extracts attendee email addresses from calendar invitations and manually entered attendee details.
@@ -51,6 +51,10 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Shows chunk-level transcription progress, retries a failed chunk once, times out stalled Apple Speech work, and provides a cancel button without deleting recordings.
 - Writes audio outside the interface thread and uses fragmented audio files so recording, stopping, and recovery are less likely to freeze the app.
 - Automatically starts AI note generation after transcription when at least one OpenAI or Claude API key is configured; otherwise it preserves the local transcript for the no-key ChatGPT handoff.
+- Queues completed meetings for transcription and AI processing so a back-to-back calendar meeting can start recording immediately while the prior meeting is processed.
+- Uses Meeting and Settings tabs; the Meeting tab contains only the active meeting and upcoming-video-meeting experience, while permissions, calendar automation, provider keys, and email preferences live in Settings.
+- Shows a Retry/Cancel alert when transcription or AI note generation fails.
+- Can automatically open the configured email client with notes and recipients filled in after generation. Direct unattended Gmail/Outlook delivery remains an OAuth integration rather than stored mailbox-password authentication.
 
 ## Requirements
 
@@ -93,7 +97,7 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 The prepared ChatGPT prompt requests clean plain text with the supporting numbers first and this Pyramid-style structure:
 
 ```text
-KEY NUMBERS
+KEY FINANCIAL AMOUNTS (only when money was stated)
 MEETING NOTES
 EXECUTIVE SUMMARY (main conclusion first, followed by supporting facts)
 DECISIONS MADE
