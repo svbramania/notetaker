@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: September 29, 2026 — Codex release 0.14.1
+Last updated: September 29, 2026 — Codex release 0.14.2
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.1`
+Current release: `0.14.2`
 
-Previous verified `main` commit: `f9fe3514599dda7822755264f94e695b18d8ea7c`; version 0.14.1 is the current local release candidate
+Previous verified `main` commit: `5d99c95095066b2e7fa1f4a8e5a78f83dd9eaa23`; version 0.14.2 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/28
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/29
 
-The version 0.14.0 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.1 must pass the same workflow before merge.
+The version 0.14.1 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.2 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -129,6 +129,12 @@ ATTENDEES AND MEETING DETAILS
 - Moved email automation from Settings into the existing Meeting panel.
 - Kept the main Meeting tab structure focused on the Meeting and Upcoming Video Meetings panels; email automation is nested inside Meeting rather than added as a third panel.
 - Preserved the manual review and resend controls shown with completed generated notes.
+
+## Version 0.14.2 changes
+
+- Moved **Generate Meeting Notes** from Settings to the Meeting panel beside **Record Meeting**.
+- The button reads **Generating…** and remains disabled while the transcript, notes, and configured email draft are being prepared.
+- Prevents the same meeting from being queued again while automatic post-processing is already active.
 
 ## Important source files
 
