@@ -262,6 +262,21 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         }
     }
 
+    func stop() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        nextMeeting = nil
+        activeMeeting = nil
+        meetingToPrompt = nil
+        status = "Calendar alerts are turned off"
+        Task { [weak self] in
+            guard let self else { return }
+            let pending = await self.pendingNotificationRequests()
+            let identifiers = pending.map(\.identifier).filter { $0.hasPrefix("video-meeting-") }
+            self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        }
+    }
+
     func requestAccess() async {
         status = "Requesting Calendar and notification access..."
 

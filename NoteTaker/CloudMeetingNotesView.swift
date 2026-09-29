@@ -11,17 +11,21 @@ struct CloudMeetingNotesView: View {
     @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
     @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
     @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
+    @AppStorage("autoOpenEmailDraftAfterNotes") private var autoOpenEmailDraftAfterNotes = true
+    @AppStorage("autoEmailEveryone") private var autoEmailEveryone = false
     @State private var configurations: [APIProviderConfiguration] = []
     @State private var newProvider: MeetingNotesProvider = .openAI
     @State private var newLabel = ""
     @State private var newModel = MeetingNotesProvider.openAI.defaultModel
     @State private var newAPIKey = ""
+    @State private var showNewAPIKey = false
     @State private var generatedNotes = ""
     @State private var recipients: [MeetingEmailRecipient] = []
     @State private var selectedRecipientIDs: Set<String> = []
     @State private var availableEmailClients: [MeetingEmailClient] = []
     @State private var senderAccount = ""
     @State private var isGenerating = false
+    @State private var generationError: String?
     @State private var status = "Add one or more API providers in the order they should be used."
 
     private let notesService = MeetingNotesService()
@@ -76,8 +80,19 @@ struct CloudMeetingNotesView: View {
                     TextField("Model", text: $newModel)
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField(newProvider.keyPlaceholder, text: $newAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    Group {
+                        if showNewAPIKey {
+                            TextField(newProvider.keyPlaceholder, text: $newAPIKey)
+                        } else {
+                            SecureField(newProvider.keyPlaceholder, text: $newAPIKey)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
+
+                    Button { showNewAPIKey.toggle() } label: {
+                        Image(systemName: showNewAPIKey ? "eye.slash" : "eye")
+                    }
+                    .help(showNewAPIKey ? "Hide API key" : "Show API key")
 
                     Button("Add API Key") { addConfiguration() }
                         .disabled(newAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -102,6 +117,24 @@ struct CloudMeetingNotesView: View {
                 .disabled(configurations.count < 2)
 
                 Text("Keys are stored separately in macOS Keychain. The numbered list controls the attempt order. Other errors stop processing so configuration and service issues remain visible.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+                Text("Email automation").font(.headline)
+                Toggle("Automatically prepare an email draft after notes are generated", isOn: $autoOpenEmailDraftAfterNotes)
+                Toggle("Select everyone from the calendar invitation", isOn: $autoEmailEveryone)
+                    .disabled(!autoOpenEmailDraftAfterNotes)
+                Picker("Send with", selection: $emailClientRawValue) {
+                    Text("Choose an installed email client").tag("")
+                    ForEach(availableEmailClients) { client in
+                        Text(client.rawValue).tag(client.rawValue)
+                    }
+                }
+                TextField("Sender account email address", text: $senderAccount)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(selectedEmailClient == nil)
+                Text("Direct unattended Gmail and Outlook delivery requires OAuth. Until that connection is added, NoteTaker prepares the addressed draft automatically for review and Send.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -258,6 +291,18 @@ struct CloudMeetingNotesView: View {
         .onChange(of: senderAccount) { _, updatedAccount in
             saveSenderAccount(updatedAccount)
         }
+        .alert(
+            "Meeting Notes Generation Failed",
+            isPresented: Binding(
+                get: { generationError != nil },
+                set: { if !$0 { generationError = nil } }
+            )
+        ) {
+            Button("Retry") { Task { await generateNotes() } }
+            Button("Cancel", role: .cancel) { generationError = nil }
+        } message: {
+            Text(generationError ?? "The provider could not generate meeting notes.")
+        }
     }
 
     @ViewBuilder
@@ -402,6 +447,12 @@ struct CloudMeetingNotesView: View {
                 )
                 try writeGeneratedNotes()
                 status = "Meeting notes generated with \(configuration.label) and saved locally."
+                if autoOpenEmailDraftAfterNotes {
+                    if autoEmailEveryone {
+                        selectedRecipientIDs = Set(recipients.map(\.id))
+                    }
+                    prepareEmail()
+                }
                 return
             } catch {
                 let shouldContinue = APIFallbackPolicy.shouldTryNext(
@@ -414,6 +465,7 @@ struct CloudMeetingNotesView: View {
                     continue
                 }
                 status = error.localizedDescription
+                generationError = error.localizedDescription
                 return
             }
         }

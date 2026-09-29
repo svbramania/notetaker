@@ -12,6 +12,25 @@ struct NoteTakerApp: App {
     }
 }
 
+private struct MeetingProcessingJob: Identifiable {
+    let id = UUID()
+    let title: String
+    let attendees: [String]
+    let recipients: [MeetingEmailRecipient]
+    let startedAt: Date
+    let endedAt: Date
+    let sessionDirectory: URL
+    let microphoneURL: URL?
+    let systemAudioURL: URL?
+    let typedEntries: [ScribeEntry]
+}
+
+private struct MeetingProcessingFailure: Identifiable {
+    let id = UUID()
+    let job: MeetingProcessingJob
+    let message: String
+}
+
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
     @StateObject private var calendarMonitor = CalendarMeetingMonitor()
@@ -35,155 +54,58 @@ struct ContentView: View {
     @State private var signOffStopTask: Task<Void, Never>?
     @State private var transcriptionTask: Task<Void, Never>?
     @State private var transcriptionTaskID: UUID?
+    @State private var processingQueue: [MeetingProcessingJob] = []
+    @State private var processingFailure: MeetingProcessingFailure?
     @State private var savedMeetings: [SavedMeetingSession] = []
     @State private var selectedSavedMeetingID = ""
-    @State private var autoGenerateNotesRequestID: UUID?
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
     @AppStorage("autoStopOnSpokenSignOff") private var autoStopOnSpokenSignOff = true
+    @AppStorage("calendarAlertsEnabled") private var calendarAlertsEnabled = true
+    @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
+    @AppStorage("autoOpenEmailDraftAfterNotes") private var autoOpenEmailDraftAfterNotes = true
+    @AppStorage("autoEmailEveryone") private var autoEmailEveryone = false
+    @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
+    @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
 
     private let scribe = LocalScribe()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-            Text("NoteTaker Scribe")
-                .font(.largeTitle.bold())
-            Text("Capture everything said, then create meeting notes with ChatGPT handoff, OpenAI, or Claude")
-                .foregroundStyle(.secondary)
-
-            GroupBox("Meeting") {
-                VStack(alignment: .leading, spacing: 10) {
-                    TextField("Meeting title", text: $title)
-                    TextField("Attendees or email addresses (comma-separated, if known)", text: $attendees)
+        TabView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("NoteTaker Scribe").font(.largeTitle.bold())
+                    meetingSection
+                    calendarMeetingSection
                 }
-                .textFieldStyle(.roundedBorder)
-                .padding(6)
+                .padding(20)
             }
+            .tabItem { Label("Meeting", systemImage: "waveform") }
 
-            calendarMeetingSection
-
-            recordingPermissionSection
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    Button {
-                        Task { await toggleRecording(clearCalendarRecipients: true) }
-                    } label: {
-                        Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isProcessing)
-
-                    if isProcessing { ProgressView().controlSize(.small) }
-                    Text(recorder.status).foregroundStyle(.secondary)
-                    Spacer()
-                }
-
-                HStack(spacing: 12) {
-                    Picker("Saved meeting", selection: $selectedSavedMeetingID) {
-                        if savedMeetings.isEmpty {
-                            Text("No saved meetings").tag("")
-                        } else {
-                            ForEach(savedMeetings) { meeting in
-                                Text(meeting.displayName).tag(meeting.id)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: 430)
-                    .disabled(recorder.isRecording || isProcessing || savedMeetings.isEmpty)
-
-                    Button("Refresh") {
-                        refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty)
-                    }
-                    .disabled(recorder.isRecording || isProcessing)
-
-                    Button("Transcribe Meeting") {
-                        Task { await startTranscriptBuild() }
-                    }
-                    .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
-
-                    if isProcessing {
-                        Button("Cancel Transcription") {
-                            transcriptionTask?.cancel()
-                        }
-                    }
-
-                    Button("Summarize in ChatGPT") {
-                        openInChatGPT()
-                    }
-                    .disabled(recorder.isRecording || isProcessing || report.isEmpty)
-                }
-            }
-
-            GroupBox("Meeting chat / typed notes") {
-                VStack(spacing: 8) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Settings").font(.largeTitle.bold())
+                    calendarSettingsSection
+                    recordingPermissionSection
+                    CloudMeetingNotesView(
+                        transcript: report,
+                        meetingTitle: title,
+                        sessionDirectory: recorder.sessionDirectory,
+                        suggestedRecipients: suggestedEmailRecipients,
+                        autoGenerateRequestID: nil
+                    )
+                    .id(recorder.sessionDirectory?.path ?? "meeting-notes-configuration")
                     HStack {
-                        Picker("Source", selection: $typedSource) {
-                            Text("Chat").tag(ScribeEntry.Source.chat)
-                            Text("My note").tag(ScribeEntry.Source.note)
-                        }
-                        .frame(width: 180)
-
-                        TextField("Paste or type something relevant to the meeting", text: $typedEntry)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit(addTypedEntry)
-
-                        Button("Add") { addTypedEntry() }
-                            .disabled(typedEntry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-
-                    if !entries.filter({ $0.source == .chat || $0.source == .note }).isEmpty {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ForEach(entries.filter { $0.source == .chat || $0.source == .note }) { entry in
-                                    Text("[\(time(entry.timestamp))] \(entry.source.rawValue): \(entry.text)")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 120)
+                        Button("Summarize in ChatGPT") { openInChatGPT() }
+                            .disabled(report.isEmpty)
+                        Button("Open Recordings Folder") { openRecordingsFolder() }
                     }
                 }
-                .padding(6)
+                .padding(20)
             }
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
-
-            GroupBox("Meeting transcript") {
-                ScrollView {
-                    Text(report.isEmpty ? "After the meeting, choose Transcribe Meeting. Spoken audio and typed meeting content will be combined into one local, timestamped transcript." : report)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .padding(8)
-                }
-                .frame(minHeight: 300)
-            }
-
-            CloudMeetingNotesView(
-                transcript: report,
-                meetingTitle: title,
-                sessionDirectory: recorder.sessionDirectory,
-                suggestedRecipients: suggestedEmailRecipients,
-                autoGenerateRequestID: autoGenerateNotesRequestID
-            )
-            .id(recorder.sessionDirectory?.path ?? "meeting-notes-configuration")
-
-            HStack {
-                Button("Open Recordings Folder") { openRecordingsFolder() }
-                Spacer()
-                Text("Audio and transcription remain on this Mac. Recording consent laws still apply.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            }
-            .padding(20)
+            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .task {
-            calendarMonitor.start()
+            if calendarAlertsEnabled { calendarMonitor.start() }
             refreshSavedMeetings(selectMostRecent: true)
         }
         .onChange(of: calendarMonitor.activeMeeting, initial: true) { _, _ in
@@ -191,6 +113,18 @@ struct ContentView: View {
         }
         .onChange(of: autoRecordCalendarMeetings) { _, _ in
             Task { await synchronizeCalendarRecording() }
+        }
+        .onChange(of: calendarAlertsEnabled) { _, enabled in
+            if enabled {
+                calendarMonitor.start()
+                Task {
+                    if !calendarMonitor.calendarAccessGranted { await calendarMonitor.requestAccess() }
+                    await synchronizeCalendarRecording()
+                }
+            } else {
+                calendarMonitor.stop()
+                Task { await synchronizeCalendarRecording() }
+            }
         }
         .onChange(of: recorder.detectedSignOffText) { _, phrase in
             scheduleSpokenSignOffStop(for: phrase)
@@ -206,13 +140,114 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recordingPermissions.refresh()
             refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty)
-            Task {
-                await calendarMonitor.refresh()
-                await synchronizeCalendarRecording()
+            if calendarAlertsEnabled {
+                Task {
+                    await calendarMonitor.refresh()
+                    await synchronizeCalendarRecording()
+                }
             }
         }
         .sheet(isPresented: $showsCalendarSelection) {
             CalendarSelectionView(calendarMonitor: calendarMonitor)
+        }
+        .alert(item: $processingFailure) { failure in
+            Alert(
+                title: Text("Meeting Notes Generation Failed"),
+                message: Text(failure.message),
+                primaryButton: .default(Text("Retry")) {
+                    enqueueProcessing(failure.job, atFront: true)
+                },
+                secondaryButton: .cancel(Text("Cancel"))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var meetingSection: some View {
+        GroupBox("Meeting") {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Meeting title", text: $title)
+                TextField("Attendees or email addresses (comma-separated, if known)", text: $attendees)
+
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await toggleRecording(clearCalendarRecipients: true) }
+                    } label: {
+                        Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    if isProcessing { ProgressView().controlSize(.small) }
+                    Text(recorder.status).foregroundStyle(.secondary)
+                    Spacer()
+                }
+
+                HStack(spacing: 12) {
+                    Picker("Saved meeting", selection: $selectedSavedMeetingID) {
+                        if savedMeetings.isEmpty { Text("No saved meetings").tag("") }
+                        ForEach(savedMeetings) { meeting in Text(meeting.displayName).tag(meeting.id) }
+                    }
+                    .frame(maxWidth: 430)
+                    .disabled(recorder.isRecording || isProcessing || savedMeetings.isEmpty)
+                    Button("Refresh") { refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty) }
+                    Button("Transcribe Meeting") { Task { await startTranscriptBuild() } }
+                        .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
+                    if isProcessing {
+                        Button("Cancel") { transcriptionTask?.cancel() }
+                    }
+                }
+
+                HStack {
+                    Picker("Source", selection: $typedSource) {
+                        Text("Chat").tag(ScribeEntry.Source.chat)
+                        Text("My note").tag(ScribeEntry.Source.note)
+                    }
+                    .frame(width: 150)
+                    TextField("Optional meeting chat or note", text: $typedEntry)
+                        .onSubmit(addTypedEntry)
+                    Button("Add") { addTypedEntry() }
+                }
+
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(.red).textSelection(.enabled)
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+            .padding(6)
+        }
+    }
+
+    @ViewBuilder
+    private var calendarSettingsSection: some View {
+        GroupBox("Calendar automation") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Enable calendar alerts", isOn: $calendarAlertsEnabled)
+                Toggle("Auto-record calendar meetings", isOn: $autoRecordCalendarMeetings)
+                    .disabled(!calendarAlertsEnabled || !calendarMonitor.calendarAccessGranted)
+                Toggle(
+                    "Also auto-record invitations without a Teams, Zoom, or Google Meet link",
+                    isOn: Binding(
+                        get: { calendarMonitor.includeInvitesWithoutLinks },
+                        set: { calendarMonitor.setIncludeInvitesWithoutLinks($0) }
+                    )
+                )
+                .disabled(!calendarAlertsEnabled || !calendarMonitor.calendarAccessGranted || !autoRecordCalendarMeetings)
+                HStack {
+                    Text(calendarMonitor.status).foregroundStyle(.secondary)
+                    Spacer()
+                    if !calendarMonitor.calendarAccessGranted {
+                        Button("Allow Calendar Access") { Task { await calendarMonitor.requestAccess() } }
+                    } else {
+                        Button("Choose Calendars") { showsCalendarSelection = true }
+                    }
+                }
+                Toggle("Automatically prepare an email draft after notes are generated", isOn: $autoOpenEmailDraftAfterNotes)
+                Toggle("Select everyone from the calendar invitation", isOn: $autoEmailEveryone)
+                    .disabled(!autoOpenEmailDraftAfterNotes)
+                Text("Direct unattended Gmail and Outlook sending requires provider OAuth. NoteTaker currently opens the configured client with the recipients and notes filled in for review.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(6)
         }
     }
 
@@ -280,59 +315,10 @@ struct ContentView: View {
     private var calendarMeetingSection: some View {
         GroupBox("Upcoming video meetings") {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 12) {
-                    Toggle("Auto-record calendar meetings", isOn: $autoRecordCalendarMeetings)
-                        .toggleStyle(.switch)
-                        .disabled(!calendarMonitor.calendarAccessGranted)
-
-                    Spacer()
-
-                    if autoRecordCalendarMeetings {
-                        Label("On", systemImage: "calendar.badge.checkmark")
-                            .foregroundStyle(.green)
-                    }
-                }
-
-                Text(
-                    autoRecordCalendarMeetings
-                        ? "NoteTaker starts and stops automatically for invitations containing a Teams, Zoom, or Google Meet link. Keep NoteTaker running and confirm participants have consented to recording."
-                        : "Turn this on to start and stop recording automatically from Teams, Zoom, and Google Meet calendar times."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                Toggle(
-                    "Also auto-record meeting invitations without a Teams, Zoom, or Google Meet link",
-                    isOn: Binding(
-                        get: { calendarMonitor.includeInvitesWithoutLinks },
-                        set: { calendarMonitor.setIncludeInvitesWithoutLinks($0) }
-                    )
-                )
-                .disabled(!calendarMonitor.calendarAccessGranted || !autoRecordCalendarMeetings)
-
-                Text("This optional setting applies to timed calendar invitations with attendees; personal calendar blocks remain excluded.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if calendarMonitor.calendarAccessGranted {
-                    HStack {
-                        Text(
-                            "Monitoring \(calendarMonitor.includedCalendarCount) of \(calendarMonitor.availableCalendars.count) calendars across \(calendarMonitor.calendarAccounts.count) accounts"
-                        )
-                        .font(.caption)
+                if !calendarAlertsEnabled {
+                    Label("Calendar alerts are turned off in Settings", systemImage: "calendar.badge.minus")
                         .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button("Choose Calendars") {
-                            showsCalendarSelection = true
-                        }
-                    }
-                }
-
-                Divider()
-
-                if let meeting = calendarMonitor.meetingToPrompt {
+                } else if let meeting = calendarMonitor.meetingToPrompt {
                     HStack(alignment: .center, spacing: 12) {
                         Image(systemName: meeting.provider.systemImage)
                             .font(.title2)
@@ -351,7 +337,7 @@ struct ContentView: View {
                             prepareAndRecord(meeting)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(recorder.isRecording || isProcessing)
+                        .disabled(recorder.isRecording)
 
                         Button("Dismiss") {
                             calendarMonitor.dismissPrompt()
@@ -383,16 +369,8 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    HStack {
-                        Image(systemName: "calendar.badge.plus")
-                            .foregroundStyle(.secondary)
-                        Text("Connect macOS Calendar to receive a recording prompt five minutes before supported video meetings.")
-                        Spacer()
-                        Button("Enable Calendar Alerts") {
-                            Task { await calendarMonitor.requestAccess() }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
+                    Text("Allow Calendar access from Settings to detect upcoming video meetings.")
+                        .foregroundStyle(.secondary)
                 }
 
                 Text(calendarMonitor.status)
@@ -464,7 +442,7 @@ struct ContentView: View {
             skippedAutoMeetingIDs.removeAll()
         }
 
-        guard autoRecordCalendarMeetings else {
+        guard calendarAlertsEnabled, autoRecordCalendarMeetings else {
             await stopAutomaticRecording(status: "Calendar auto-record turned off — recording saved locally")
             return
         }
@@ -476,8 +454,7 @@ struct ContentView: View {
         guard let activeMeeting,
               !skippedAutoMeetingIDs.contains(activeMeeting.id),
               autoRecordedMeetingID == nil,
-              !recorder.isRecording,
-              !isProcessing else { return }
+              !recorder.isRecording else { return }
 
         title = activeMeeting.title
         attendees = activeMeeting.attendeeNames.joined(separator: ", ")
@@ -550,10 +527,13 @@ struct ContentView: View {
         signOffStopTask?.cancel()
         signOffStopTask = nil
         await recorder.stop()
-        endedAt = Date()
+        let finishedAt = Date()
+        endedAt = finishedAt
         recorder.status = status
         refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
-        await startTranscriptBuild()
+        if let job = makeProcessingJob(endedAt: finishedAt) {
+            enqueueProcessing(job)
+        }
     }
 
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
@@ -572,24 +552,52 @@ struct ContentView: View {
     }
 
     private func startTranscriptBuild() async {
+        guard let job = makeProcessingJob(endedAt: endedAt ?? Date()) else { return }
+        enqueueProcessing(job)
+    }
+
+    private func makeProcessingJob(endedAt: Date) -> MeetingProcessingJob? {
+        guard let start = startedAt,
+              let folder = recorder.sessionDirectory,
+              recorder.microphoneURL != nil || recorder.systemAudioURL != nil else {
+            errorMessage = "The selected meeting does not contain a microphone or system-audio recording."
+            return nil
+        }
+        return MeetingProcessingJob(
+            title: title,
+            attendees: attendees.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
+            recipients: suggestedEmailRecipients,
+            startedAt: start,
+            endedAt: endedAt,
+            sessionDirectory: folder,
+            microphoneURL: recorder.microphoneURL,
+            systemAudioURL: recorder.systemAudioURL,
+            typedEntries: entries.filter { $0.source == .chat || $0.source == .note }
+        )
+    }
+
+    private func enqueueProcessing(_ job: MeetingProcessingJob, atFront: Bool = false) {
+        if atFront { processingQueue.insert(job, at: 0) } else { processingQueue.append(job) }
+        startProcessingQueueIfNeeded()
+    }
+
+    private func startProcessingQueueIfNeeded() {
         guard transcriptionTask == nil else { return }
         let taskID = UUID()
         transcriptionTaskID = taskID
-        let task = Task { await buildTranscript() }
-        transcriptionTask = task
-        await task.value
-        if transcriptionTaskID == taskID {
-            transcriptionTask = nil
-            transcriptionTaskID = nil
+        transcriptionTask = Task {
+            while !processingQueue.isEmpty, !Task.isCancelled {
+                let job = processingQueue.removeFirst()
+                await buildTranscript(for: job)
+            }
+            if transcriptionTaskID == taskID {
+                transcriptionTask = nil
+                transcriptionTaskID = nil
+            }
         }
     }
 
-    private func buildTranscript() async {
-        guard let start = startedAt,
-              recorder.microphoneURL != nil || recorder.systemAudioURL != nil else {
-            errorMessage = "The selected meeting does not contain a microphone or system-audio recording."
-            return
-        }
+    private func buildTranscript(for job: MeetingProcessingJob) async {
 
         errorMessage = nil
         isProcessing = true
@@ -600,13 +608,13 @@ struct ContentView: View {
             var transcriptionErrors: [Error] = []
 
             let micEntries: [ScribeEntry]
-            if let mic = recorder.microphoneURL {
+            if let mic = job.microphoneURL {
                 recorder.status = "Preparing microphone transcription..."
                 do {
                     micEntries = try await scribe.transcribeFileAllowingSilence(
                         mic,
                         source: .microphone,
-                        meetingStart: start
+                        meetingStart: job.startedAt
                     ) { progress in
                         recorder.status = transcriptionStatus(
                             track: "microphone",
@@ -624,13 +632,13 @@ struct ContentView: View {
             }
 
             let systemEntries: [ScribeEntry]
-            if let system = recorder.systemAudioURL {
+            if let system = job.systemAudioURL {
                 recorder.status = "Preparing system-audio transcription..."
                 do {
                     systemEntries = try await scribe.transcribeFileAllowingSilence(
                         system,
                         source: .systemAudio,
-                        meetingStart: start
+                        meetingStart: job.startedAt
                     ) { progress in
                         recorder.status = transcriptionStatus(
                             track: "system audio",
@@ -651,36 +659,95 @@ struct ContentView: View {
                 microphone: micEntries,
                 systemAudio: systemEntries
             )
-            if spoken.isEmpty && entries.isEmpty {
+            if spoken.isEmpty && job.typedEntries.isEmpty {
                 throw transcriptionErrors.first ?? LocalScribeError.noSpeechDetected
             }
-            let typedEntries = entries.filter { $0.source == .chat || $0.source == .note }
-            let allEntries = (typedEntries + spoken).sorted { $0.timestamp < $1.timestamp }
-            entries = allEntries
-
-            let names = attendees.split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+            let allEntries = (job.typedEntries + spoken).sorted { $0.timestamp < $1.timestamp }
 
             let built = scribe.buildTranscript(
-                title: title,
-                startedAt: start,
-                endedAt: endedAt ?? Date(),
-                attendees: names,
+                title: job.title,
+                startedAt: job.startedAt,
+                endedAt: job.endedAt,
+                attendees: job.attendees,
                 entries: allEntries
             )
-            report = built
-            try save(report: built, entries: allEntries)
+            try save(report: built, entries: allEntries, in: job.sessionDirectory)
+            if recorder.sessionDirectory == job.sessionDirectory {
+                report = built
+                entries = allEntries
+            }
             recorder.status = transcriptionErrors.isEmpty
                 ? "Transcript saved — generating formatted meeting notes"
                 : "Partial transcript saved — generating formatted meeting notes"
-            autoGenerateNotesRequestID = UUID()
+            try await generateAndSaveNotes(for: job, transcript: built)
             refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
         } catch is CancellationError {
             recorder.status = "Transcription cancelled — recordings preserved for retry"
         } catch {
             errorMessage = error.localizedDescription
+            processingFailure = MeetingProcessingFailure(job: job, message: error.localizedDescription)
         }
+    }
+
+    private func generateAndSaveNotes(for job: MeetingProcessingJob, transcript: String) async throws {
+        let configurations = APIProviderConfigurationStore.load()
+        guard !configurations.isEmpty else {
+            recorder.status = "Transcript saved — no API provider configured"
+            return
+        }
+
+        var lastError: Error?
+        for (index, configuration) in configurations.enumerated() {
+            do {
+                guard let key = try APIKeyStore.load(identifier: configuration.id.uuidString) else {
+                    throw MeetingNotesServiceError.missingAPIKey
+                }
+                let notes = try await MeetingNotesService().generate(
+                    transcript: transcript,
+                    provider: configuration.provider,
+                    model: configuration.model,
+                    apiKey: key
+                )
+                try notes.write(
+                    to: job.sessionDirectory.appendingPathComponent("meeting-notes.md"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+                recorder.status = "Meeting notes generated and saved"
+                if autoOpenEmailDraftAfterNotes {
+                    prepareAutomaticEmail(notes: notes, job: job)
+                }
+                return
+            } catch {
+                lastError = error
+                if APIFallbackPolicy.shouldTryNext(
+                    after: error,
+                    automaticFallbackEnabled: autoFallbackOnQuotaLimit,
+                    hasNextProvider: index < configurations.count - 1
+                ) { continue }
+                throw error
+            }
+        }
+        throw lastError ?? MeetingNotesServiceError.invalidResponse
+    }
+
+    private func prepareAutomaticEmail(notes: String, job: MeetingProcessingJob) {
+        guard let client = MeetingEmailClient(rawValue: emailClientRawValue) else { return }
+        let sender = UserDefaults.standard.string(forKey: client.senderAccountDefaultsKey) ?? ""
+        guard MeetingEmailSenderAccount.isValid(sender) else { return }
+        let selected = autoEmailEveryone
+            ? job.recipients.map(\.email)
+            : job.recipients.filter { $0.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame }.map(\.email)
+        guard !selected.isEmpty else { return }
+        try? MeetingEmailLauncher.launch(
+            MeetingEmailDraft(
+                recipients: selected,
+                subject: job.title.isEmpty ? "Meeting notes" : "Meeting notes: \(job.title)",
+                body: notes,
+                senderAccount: sender
+            ),
+            with: client
+        )
     }
 
     private func transcriptionStatus(
@@ -725,7 +792,6 @@ struct ContentView: View {
         endedAt = meeting.updatedAt
         calendarEmailRecipients = []
         errorMessage = nil
-        autoGenerateNotesRequestID = nil
 
         let transcriptURL = meeting.directoryURL.appendingPathComponent("meeting-transcript.md")
         report = (try? String(contentsOf: transcriptURL, encoding: .utf8)) ?? ""
@@ -739,8 +805,7 @@ struct ContentView: View {
         }
     }
 
-    private func save(report: String, entries: [ScribeEntry]) throws {
-        guard let folder = recorder.sessionDirectory else { return }
+    private func save(report: String, entries: [ScribeEntry], in folder: URL) throws {
         try report.write(to: folder.appendingPathComponent("meeting-transcript.md"), atomically: true, encoding: .utf8)
         let data = try JSONEncoder().encode(entries)
         try data.write(to: folder.appendingPathComponent("transcript.json"), options: .atomic)
