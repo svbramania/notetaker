@@ -53,6 +53,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Automatically starts AI note generation after transcription when at least one OpenAI or Claude API key is configured; otherwise it preserves the local transcript for the no-key ChatGPT handoff.
 - Queues completed meetings for transcription and AI processing so a back-to-back calendar meeting can start recording immediately while the prior meeting is processed.
 - Uses Meeting and Settings tabs. The Meeting tab contains the active meeting, upcoming video meetings, and the email-automation controls needed before the current meeting finishes; permissions, calendar automation, and provider keys live in Settings.
+- Places **Generate Meeting Notes** beside **Record Meeting**. While transcription, Artificial Intelligence generation, and automatic email-draft preparation are running, the disabled button reads **Generating…** so the same meeting cannot be queued twice.
 - Shows a Retry/Cancel alert when transcription or AI note generation fails.
 - Can automatically open the configured email client with notes and recipients filled in after generation. Direct unattended Gmail/Outlook delivery remains an OAuth integration rather than stored mailbox-password authentication.
 
