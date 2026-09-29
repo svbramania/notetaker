@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: September 29, 2026 — Codex release 0.14.0
+Last updated: September 29, 2026 — Codex release 0.14.1
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.0`
+Current release: `0.14.1`
 
-Previous verified `main` commit: `0b95254524c01f93bc781a5e8f224e578631565a`; version 0.14.0 is the current local release commit
+Previous verified `main` commit: `f9fe3514599dda7822755264f94e695b18d8ea7c`; version 0.14.1 is the current local release candidate
 
-Pull request for the latest release: https://github.com/svbramania/notetaker/pull/27
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/28
 
-The version 0.13.0 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.0 must pass the same workflow before merge.
+The version 0.14.0 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.1 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -117,12 +117,18 @@ ATTENDEES AND MEETING DETAILS
 
 - Extracts candidate recipient addresses from calendar attendees and manually entered attendee details.
 - Displays one **Everyone** checkbox plus individual recipient checkboxes.
-- Email-client, sender-account, automatic-draft, and recipient-default choices are configured ahead of time in Settings.
+- Email-client, sender-account, automatic-draft, and recipient-default choices are configured ahead of time in the Meeting tab, beside the meeting they affect.
 - On a new meeting, all recipients start unchecked except the individual address selected most recently.
 - Detects supported installed clients: Apple Mail, Microsoft Outlook, and Gmail in a browser.
 - Lets the user choose the email client and specify the sender-account email.
 - Remembers a separate sender account for each client.
 - Opens a reviewable draft; it does not silently send email.
+
+## Version 0.14.1 changes
+
+- Moved email automation from Settings into the existing Meeting panel.
+- Kept the main Meeting tab structure focused on the Meeting and Upcoming Video Meetings panels; email automation is nested inside Meeting rather than added as a third panel.
+- Preserved the manual review and resend controls shown with completed generated notes.
 
 ## Important source files
 
@@ -241,4 +247,3 @@ Start from `main`, read this document and the repository README, and inspect the
 - Added masked API-key entry with an explicit reveal/hide control.
 - Added ahead-of-time automatic email-draft and recipient-default settings.
 - Added Retry and Cancel alerts for post-processing and AI generation failures.
-
