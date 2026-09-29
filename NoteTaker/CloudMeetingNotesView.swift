@@ -127,21 +127,12 @@ struct CloudMeetingNotesView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Generate Meeting Notes") {
-                        Task { await generateNotes() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(
-                        transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || configurations.isEmpty
-                            || isGenerating
-                    )
                     if isGenerating {
                         ProgressView().controlSize(.small)
                     }
                 }
 
-                Text("Generating notes sends the transcript to the provider being attempted. Completed notes are saved locally with the recording.")
+                Text("Use Generate Meeting Notes beside Record Meeting on the Meeting tab. Generating notes sends the transcript to the provider being attempted, then saves the completed notes locally with the recording.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
