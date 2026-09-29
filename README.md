@@ -52,7 +52,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Writes audio outside the interface thread and uses fragmented audio files so recording, stopping, and recovery are less likely to freeze the app.
 - Automatically starts AI note generation after transcription when at least one OpenAI or Claude API key is configured; otherwise it preserves the local transcript for the no-key ChatGPT handoff.
 - Queues completed meetings for transcription and AI processing so a back-to-back calendar meeting can start recording immediately while the prior meeting is processed.
-- Uses Meeting and Settings tabs; the Meeting tab contains only the active meeting and upcoming-video-meeting experience, while permissions, calendar automation, provider keys, and email preferences live in Settings.
+- Uses Meeting and Settings tabs. The Meeting tab contains the active meeting, upcoming video meetings, and the email-automation controls needed before the current meeting finishes; permissions, calendar automation, and provider keys live in Settings.
 - Shows a Retry/Cancel alert when transcription or AI note generation fails.
 - Can automatically open the configured email client with notes and recipients filled in after generation. Direct unattended Gmail/Outlook delivery remains an OAuth integration rather than stored mailbox-password authentication.
 
@@ -88,8 +88,8 @@ In Xcode, select the `NoteTaker` scheme and run the app. macOS will request Micr
 11. Review the complete local transcript.
 12. Use **Summarize in ChatGPT** for the existing no-key handoff, or add one or more OpenAI/Claude API keys and arrange their numbered attempt order.
 13. Optionally enable automatic provider fallback for exhausted usage, credit, quota, or spend limits, then select **Generate Meeting Notes**.
-14. Select **Everyone** or individual attendee email checkboxes. On the next meeting, only the most recently selected individual address is preselected.
-15. Choose one of the detected options under **Send with**, enter the sender account configured in that client, then choose **Open Email Draft**.
+14. In the Meeting tab's **Email automation** section, select **Everyone** or an individual attendee email address. On the next meeting, only the most recently selected individual address is preselected.
+15. Choose one of the detected email clients, enter the sender account configured in that client, and enable automatic draft preparation. You can still review or resend completed notes manually.
 16. Review the addressed draft in the selected email client and send it.
 
 ## ChatGPT summary output

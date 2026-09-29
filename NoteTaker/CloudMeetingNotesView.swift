@@ -120,24 +120,6 @@ struct CloudMeetingNotesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Divider()
-                Text("Email automation").font(.headline)
-                Toggle("Automatically prepare an email draft after notes are generated", isOn: $autoOpenEmailDraftAfterNotes)
-                Toggle("Select everyone from the calendar invitation", isOn: $autoEmailEveryone)
-                    .disabled(!autoOpenEmailDraftAfterNotes)
-                Picker("Send with", selection: $emailClientRawValue) {
-                    Text("Choose an installed email client").tag("")
-                    ForEach(availableEmailClients) { client in
-                        Text(client.rawValue).tag(client.rawValue)
-                    }
-                }
-                TextField("Sender account email address", text: $senderAccount)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(selectedEmailClient == nil)
-                Text("Direct unattended Gmail and Outlook delivery requires OAuth. Until that connection is added, NoteTaker prepares the addressed draft automatically for review and Send.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 HStack(spacing: 8) {
                     Image(systemName: configurations.isEmpty ? "key" : "key.fill")
                         .foregroundStyle(configurations.isEmpty ? Color.secondary : Color.green)
