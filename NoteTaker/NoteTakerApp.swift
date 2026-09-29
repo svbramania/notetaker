@@ -58,6 +58,8 @@ struct ContentView: View {
     @State private var processingFailure: MeetingProcessingFailure?
     @State private var savedMeetings: [SavedMeetingSession] = []
     @State private var selectedSavedMeetingID = ""
+    @State private var availableMeetingEmailClients: [MeetingEmailClient] = []
+    @State private var meetingSenderAccount = ""
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
     @AppStorage("autoStopOnSpokenSignOff") private var autoStopOnSpokenSignOff = true
     @AppStorage("calendarAlertsEnabled") private var calendarAlertsEnabled = true
@@ -107,12 +109,19 @@ struct ContentView: View {
         .task {
             if calendarAlertsEnabled { calendarMonitor.start() }
             refreshSavedMeetings(selectMostRecent: true)
+            refreshMeetingEmailClients()
         }
         .onChange(of: calendarMonitor.activeMeeting, initial: true) { _, _ in
             Task { await synchronizeCalendarRecording() }
         }
         .onChange(of: autoRecordCalendarMeetings) { _, _ in
             Task { await synchronizeCalendarRecording() }
+        }
+        .onChange(of: emailClientRawValue) { _, _ in
+            loadMeetingSenderAccount()
+        }
+        .onChange(of: meetingSenderAccount) { _, account in
+            saveMeetingSenderAccount(account)
         }
         .onChange(of: calendarAlertsEnabled) { _, enabled in
             if enabled {
@@ -207,6 +216,52 @@ struct ContentView: View {
                     Button("Add") { addTypedEntry() }
                 }
 
+                Divider()
+                Text("Email automation").font(.headline)
+                Toggle("Automatically prepare an email draft after notes are generated", isOn: $autoOpenEmailDraftAfterNotes)
+                Toggle("Send to everyone on the calendar invitation", isOn: $autoEmailEveryone)
+                    .disabled(!autoOpenEmailDraftAfterNotes || suggestedEmailRecipients.isEmpty)
+
+                if !suggestedEmailRecipients.isEmpty {
+                    Text("Recipients").font(.subheadline.bold())
+                    ForEach(suggestedEmailRecipients) { recipient in
+                        Toggle(
+                            isOn: Binding(
+                                get: {
+                                    autoEmailEveryone
+                                        || recipient.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame
+                                },
+                                set: { selected in
+                                    autoEmailEveryone = false
+                                    lastRecipientEmail = selected ? recipient.email : ""
+                                }
+                            )
+                        ) {
+                            Text("\(recipient.name) — \(recipient.email)")
+                        }
+                        .disabled(autoEmailEveryone)
+                    }
+                } else {
+                    Text("Recipient choices will appear when the calendar invitation or attendee field contains email addresses.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Picker("Email client", selection: $emailClientRawValue) {
+                        Text("Choose an installed email client").tag("")
+                        ForEach(availableMeetingEmailClients) { client in
+                            Text(client.rawValue).tag(client.rawValue)
+                        }
+                    }
+                    TextField("Sender account email", text: $meetingSenderAccount)
+                        .disabled(emailClientRawValue.isEmpty)
+                    Button("Refresh") { refreshMeetingEmailClients() }
+                }
+                Text("After notes are generated, NoteTaker opens the configured client with the selected recipients and notes filled in for review.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if let errorMessage {
                     Text(errorMessage).foregroundStyle(.red).textSelection(.enabled)
                 }
@@ -240,12 +295,6 @@ struct ContentView: View {
                         Button("Choose Calendars") { showsCalendarSelection = true }
                     }
                 }
-                Toggle("Automatically prepare an email draft after notes are generated", isOn: $autoOpenEmailDraftAfterNotes)
-                Toggle("Select everyone from the calendar invitation", isOn: $autoEmailEveryone)
-                    .disabled(!autoOpenEmailDraftAfterNotes)
-                Text("Direct unattended Gmail and Outlook sending requires provider OAuth. NoteTaker currently opens the configured client with the recipients and notes filled in for review.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .padding(6)
         }
@@ -748,6 +797,30 @@ struct ContentView: View {
             ),
             with: client
         )
+    }
+
+    private func refreshMeetingEmailClients() {
+        availableMeetingEmailClients = MeetingEmailClient.installed()
+        guard let selected = MeetingEmailClient(rawValue: emailClientRawValue),
+              availableMeetingEmailClients.contains(selected) else {
+            emailClientRawValue = ""
+            meetingSenderAccount = ""
+            return
+        }
+        loadMeetingSenderAccount()
+    }
+
+    private func loadMeetingSenderAccount() {
+        guard let client = MeetingEmailClient(rawValue: emailClientRawValue) else {
+            meetingSenderAccount = ""
+            return
+        }
+        meetingSenderAccount = UserDefaults.standard.string(forKey: client.senderAccountDefaultsKey) ?? ""
+    }
+
+    private func saveMeetingSenderAccount(_ account: String) {
+        guard let client = MeetingEmailClient(rawValue: emailClientRawValue) else { return }
+        UserDefaults.standard.set(account, forKey: client.senderAccountDefaultsKey)
     }
 
     private func transcriptionStatus(
