@@ -185,6 +185,16 @@ struct ContentView: View {
                         Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
                     }
                     .buttonStyle(.borderedProminent)
+                    Button(isMeetingNotesGenerationActive ? "Generating…" : "Generate Meeting Notes") {
+                        Task { await startTranscriptBuild() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        recorder.isRecording
+                            || isMeetingNotesGenerationActive
+                            || recorder.sessionDirectory == nil
+                            || APIProviderConfigurationStore.load().isEmpty
+                    )
                     if isProcessing { ProgressView().controlSize(.small) }
                     Text(recorder.status).foregroundStyle(.secondary)
                     Spacer()
@@ -434,6 +444,10 @@ struct ContentView: View {
         EmailAddressExtractor.merged(
             calendarEmailRecipients + EmailAddressExtractor.recipients(in: attendees)
         )
+    }
+
+    private var isMeetingNotesGenerationActive: Bool {
+        isProcessing || transcriptionTask != nil || !processingQueue.isEmpty
     }
 
     private func toggleRecording(clearCalendarRecipients: Bool = false) async {
