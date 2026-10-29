@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.7
+Last updated: October 29, 2026 — Codex release 0.14.8
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.7`
+Current release: `0.14.8`
 
-Previous verified `main` commit: `63349763293928f08b6102ec69bf0aa1dceb58a6`; version 0.14.7 is the current local release candidate
+Previous verified `main` commit: `afb8422ae84ebe46d3ce10a2ae117ced54ae45ad`; version 0.14.8 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.14.6 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.7 must pass the same workflow before merge.
+The version 0.14.7 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.8 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -168,6 +168,13 @@ ATTENDEES AND MEETING DETAILS
 - Waits for the macOS application-launch completion result instead of silently discarding it.
 - Reports note saving and email composition as separate outcomes; notes remain saved when draft creation fails.
 - Offers Retry for email composition without rerunning transcription or consuming another AI request.
+
+## Version 0.14.8 changes
+
+- Adds an explicit persistent Email recipients field to the Meeting tab.
+- Combines manually entered addresses with calendar and attendee addresses.
+- Displays every valid address as a selectable recipient before note generation.
+- Rewords missing-recipient errors to point directly to the visible control.
 
 ## Important source files
 

@@ -75,6 +75,7 @@ struct ContentView: View {
     @AppStorage("autoEmailEveryone") private var autoEmailEveryone = false
     @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
     @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
+    @AppStorage("manualMeetingEmailRecipients") private var manualEmailRecipients = ""
 
     private let scribe = LocalScribe()
 
@@ -244,8 +245,17 @@ struct ContentView: View {
                 Toggle("Send to everyone on the calendar invitation", isOn: $autoEmailEveryone)
                     .disabled(!autoOpenEmailDraftAfterNotes || suggestedEmailRecipients.isEmpty)
 
+                TextField(
+                    "Email recipients (comma-separated)",
+                    text: $manualEmailRecipients
+                )
+                .disabled(!autoOpenEmailDraftAfterNotes)
+                Text("Calendar attendee addresses are added automatically. Enter or paste any missing addresses here; each valid address appears below for selection.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if !suggestedEmailRecipients.isEmpty {
-                    Text("Recipients").font(.subheadline.bold())
+                    Text("Choose recipients").font(.subheadline.bold())
                     ForEach(suggestedEmailRecipients) { recipient in
                         Toggle(
                             isOn: Binding(
@@ -264,7 +274,7 @@ struct ContentView: View {
                         .disabled(autoEmailEveryone)
                     }
                 } else {
-                    Text("Recipient choices will appear when the calendar invitation or attendee field contains email addresses.")
+                    Text("Enter at least one complete email address above to display recipient choices.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -460,7 +470,9 @@ struct ContentView: View {
 
     private var suggestedEmailRecipients: [MeetingEmailRecipient] {
         EmailAddressExtractor.merged(
-            calendarEmailRecipients + EmailAddressExtractor.recipients(in: attendees)
+            calendarEmailRecipients
+                + EmailAddressExtractor.recipients(in: attendees)
+                + EmailAddressExtractor.recipients(in: manualEmailRecipients)
         )
     }
 
