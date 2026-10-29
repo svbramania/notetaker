@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.4
+Last updated: October 29, 2026 — Codex release 0.14.5
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.4`
+Current release: `0.14.5`
 
-Previous verified `main` commit: `f69137f630eb57f37ac9530ec0e07587bf7b1b3c`; version 0.14.4 is the current local release candidate
+Previous verified `main` commit: `4eee9e65cf2d9cf02592fe45aaff167b3dd2986a`; version 0.14.5 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/31
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/32
 
-The version 0.14.3 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.4 must pass the same workflow before merge.
+The version 0.14.4 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.5 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -148,6 +148,12 @@ ATTENDEES AND MEETING DETAILS
 - Replaced deprecated AVAssetExportSession completion/status/error APIs with the macOS 15 async export API.
 - Preserved audio-export cancellation and the 60-second timeout.
 - Marked the generated Xcode project as reviewed by Xcode 26 through `project.yml`, while retaining its existing Xcode 16-compatible project format.
+
+## Version 0.14.5 changes
+
+- Prevented saved email-client preferences from becoming invalid SwiftUI picker selections while installed-client detection is still loading.
+- Applied the fix to both the Meeting-tab email automation picker and the completed-notes email picker.
+- Added regression tests for loading and already-available Outlook selections.
 
 ## Important source files
 
