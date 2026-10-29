@@ -30,6 +30,7 @@ enum LocalScribeError: LocalizedError {
     case noSpeechDetected
     case recognitionTimedOut
     case audioPreparationTimedOut
+    case unreadableRecording
 
     var errorDescription: String? {
         switch self {
@@ -45,6 +46,8 @@ enum LocalScribeError: LocalizedError {
             return "Apple Speech stopped responding to an audio chunk. The recording was preserved; retry transcription to continue."
         case .audioPreparationTimedOut:
             return "Preparing an audio chunk took too long. The recording was preserved; retry transcription to continue."
+        case .unreadableRecording:
+            return "The recording file could not be read as audio. It was preserved; open the meeting folder to verify that the file plays before retrying transcription."
         }
     }
 }
@@ -429,10 +432,34 @@ final class LocalScribe {
     }
 
     private func prepareAudioChunks(for url: URL) async throws -> PreparedAudioChunks {
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration).seconds
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let fileSize = attributes[.size] as? NSNumber,
+              fileSize.int64Value > 0 else {
+            throw LocalScribeError.unreadableRecording
+        }
 
-        guard duration.isFinite, duration > maximumRecognitionDuration else {
+        let asset = AVURLAsset(url: url)
+        let audioTracks: [AVAssetTrack]
+        do {
+            audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        } catch {
+            throw LocalScribeError.unreadableRecording
+        }
+        guard !audioTracks.isEmpty else {
+            throw LocalScribeError.unreadableRecording
+        }
+        let duration: TimeInterval
+        do {
+            duration = try await asset.load(.duration).seconds
+        } catch {
+            throw LocalScribeError.unreadableRecording
+        }
+
+        guard duration.isFinite, duration > 0 else {
+            throw LocalScribeError.unreadableRecording
+        }
+
+        guard duration > maximumRecognitionDuration else {
             return PreparedAudioChunks(
                 chunks: [AudioChunk(url: url, offset: 0)],
                 temporaryDirectory: nil
