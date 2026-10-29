@@ -35,6 +35,17 @@ enum MeetingEmailClient: String, CaseIterable, Identifiable {
         }
     }
 
+    static func pickerValues(
+        available: [MeetingEmailClient],
+        selectedRawValue: String
+    ) -> [String] {
+        var values = available.map(\.rawValue)
+        if !selectedRawValue.isEmpty, !values.contains(selectedRawValue) {
+            values.append(selectedRawValue)
+        }
+        return values
+    }
+
     @MainActor
     static func installed(using workspace: NSWorkspace = .shared) -> [MeetingEmailClient] {
         let installedBundleIdentifiers = Set(
