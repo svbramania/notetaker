@@ -129,6 +129,8 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 
 Version 0.14.4 uses the current macOS 15 EventKit authorization state and AVFoundation async export APIs, while preserving cancellable, time-bounded audio chunk preparation.
 
+Version 0.14.5 keeps a saved email-client selection valid while installed applications are being detected, preventing transient SwiftUI picker warnings during launch.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
