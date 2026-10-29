@@ -18,6 +18,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Keeps **Open Recordings Folder** visible at all times.
 - Keeps the signed-in ChatGPT handoff available without an API key.
 - Accepts multiple OpenAI and Claude API keys, stores each independently in macOS Keychain with device-only unlocked access, and lets the user arrange their attempt order.
+- Supports Anthropic keys that require an `anthropic-workspace-id` header through an optional Workspace ID field on each Claude provider configuration.
 - Provides an opt-in fallback that tries the next configured provider only when the current provider reports an exhausted credit, quota, usage, or spend limit.
 - Generates clean, editable, email-ready plain-text notes without Markdown heading clutter.
 - Places a verified **KEY FINANCIAL AMOUNTS** block at the top only when the transcript contains an actual monetary amount. Meetings without money omit the block entirely; other numbers remain in their relevant sections.
