@@ -299,6 +299,30 @@ final class MeetingNotesServiceTests: XCTestCase {
         )
     }
 
+    func testClaudeAuthenticationIncludesOptionalWorkspaceHeader() {
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        MeetingNotesService.applyClaudeAuthentication(
+            to: &request,
+            apiKey: "test-key",
+            workspaceID: "  wrkspc_test  "
+        )
+
+        XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "test-key")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "anthropic-workspace-id"), "wrkspc_test")
+    }
+
+    func testClaudeAuthenticationOmitsBlankWorkspaceHeader() {
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        MeetingNotesService.applyClaudeAuthentication(
+            to: &request,
+            apiKey: "test-key",
+            workspaceID: "   "
+        )
+
+        XCTAssertNil(request.value(forHTTPHeaderField: "anthropic-workspace-id"))
+    }
+
     func testMeetingNotesPromptIncludesRequiredSections() {
         XCTAssertTrue(MeetingNotesService.instructions.contains("EXECUTIVE SUMMARY"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("DECISIONS MADE"))
@@ -580,7 +604,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         let first = APIProviderConfiguration(
             provider: .claude,
             label: "Primary",
-            model: "claude-sonnet-5"
+            model: "claude-sonnet-5",
+            workspaceID: "wrkspc_primary"
         )
         let second = APIProviderConfiguration(
             provider: .openAI,
@@ -591,6 +616,17 @@ final class MeetingNotesServiceTests: XCTestCase {
         let restored = try JSONDecoder().decode([APIProviderConfiguration].self, from: data)
 
         XCTAssertEqual(restored, [first, second])
+    }
+
+    func testProviderConfigurationDecodesLegacyDataWithoutWorkspaceID() throws {
+        let data = Data(
+            #"[{"id":"00000000-0000-0000-0000-000000000001","provider":"Claude","label":"Legacy","model":"claude-sonnet-5"}]"#.utf8
+        )
+
+        let restored = try JSONDecoder().decode([APIProviderConfiguration].self, from: data)
+
+        XCTAssertEqual(restored.first?.label, "Legacy")
+        XCTAssertNil(restored.first?.workspaceID)
     }
 }
 

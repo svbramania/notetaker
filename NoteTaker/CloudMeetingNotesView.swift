@@ -280,31 +280,59 @@ struct CloudMeetingNotesView: View {
 
     @ViewBuilder
     private func providerRow(_ configuration: APIProviderConfiguration, at index: Int) -> some View {
-        HStack(spacing: 8) {
-            Text("\(index + 1)")
-                .font(.headline.monospacedDigit())
-                .frame(width: 24)
-            Text(configuration.provider.rawValue)
-                .frame(width: 75, alignment: .leading)
-            TextField("Label", text: configurationBinding(configuration.id, keyPath: \.label))
-                .textFieldStyle(.roundedBorder)
-            TextField("Model", text: configurationBinding(configuration.id, keyPath: \.model))
-                .textFieldStyle(.roundedBorder)
-            Button { moveConfiguration(from: index, to: index - 1) } label: {
-                Image(systemName: "arrow.up")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("\(index + 1)")
+                    .font(.headline.monospacedDigit())
+                    .frame(width: 24)
+                Text(configuration.provider.rawValue)
+                    .frame(width: 75, alignment: .leading)
+                TextField("Label", text: configurationBinding(configuration.id, keyPath: \.label))
+                    .textFieldStyle(.roundedBorder)
+                TextField("Model", text: configurationBinding(configuration.id, keyPath: \.model))
+                    .textFieldStyle(.roundedBorder)
+                Button { moveConfiguration(from: index, to: index - 1) } label: {
+                    Image(systemName: "arrow.up")
+                }
+                .help("Move earlier")
+                .disabled(index == 0)
+                Button { moveConfiguration(from: index, to: index + 1) } label: {
+                    Image(systemName: "arrow.down")
+                }
+                .help("Move later")
+                .disabled(index == configurations.count - 1)
+                Button(role: .destructive) { removeConfiguration(configuration) } label: {
+                    Image(systemName: "trash")
+                }
+                .help("Remove API key")
             }
-            .help("Move earlier")
-            .disabled(index == 0)
-            Button { moveConfiguration(from: index, to: index + 1) } label: {
-                Image(systemName: "arrow.down")
+
+            if configuration.provider == .claude {
+                HStack(spacing: 8) {
+                    Text("Workspace ID")
+                        .frame(width: 107, alignment: .trailing)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField(
+                        "Optional unless Anthropic says this key is not scoped to a workspace",
+                        text: workspaceIDBinding(configuration.id)
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
             }
-            .help("Move later")
-            .disabled(index == configurations.count - 1)
-            Button(role: .destructive) { removeConfiguration(configuration) } label: {
-                Image(systemName: "trash")
-            }
-            .help("Remove API key")
         }
+    }
+
+    private func workspaceIDBinding(_ id: UUID) -> Binding<String> {
+        Binding(
+            get: { configurations.first(where: { $0.id == id })?.workspaceID ?? "" },
+            set: { value in
+                guard let index = configurations.firstIndex(where: { $0.id == id }) else { return }
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                configurations[index].workspaceID = trimmed.isEmpty ? nil : trimmed
+                persistConfigurations()
+            }
+        )
     }
 
     private func configurationBinding(
@@ -416,7 +444,8 @@ struct CloudMeetingNotesView: View {
                     transcript: transcript,
                     provider: configuration.provider,
                     model: configuration.model,
-                    apiKey: key
+                    apiKey: key,
+                    workspaceID: configuration.workspaceID
                 )
                 try writeGeneratedNotes()
                 status = "Meeting notes generated with \(configuration.label) and saved locally."

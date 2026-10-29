@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: September 29, 2026 — Codex release 0.14.2
+Last updated: October 29, 2026 — Codex release 0.14.3
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.2`
+Current release: `0.14.3`
 
-Previous verified `main` commit: `5d99c95095066b2e7fa1f4a8e5a78f83dd9eaa23`; version 0.14.2 is the current local release candidate
+Previous verified `main` commit: `a91de2d733cafc47d705e404a51f737b4228b9a3`; version 0.14.3 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/29
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/30
 
-The version 0.14.1 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.2 must pass the same workflow before merge.
+The version 0.14.2 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.3 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -135,6 +135,12 @@ ATTENDEES AND MEETING DETAILS
 - Moved **Generate Meeting Notes** from Settings to the Meeting panel beside **Record Meeting**.
 - The button reads **Generating…** and remains disabled while the transcript, notes, and configured email draft are being prepared.
 - Prevents the same meeting from being queued again while automatic post-processing is already active.
+
+## Version 0.14.3 changes
+
+- Added an optional Workspace ID field to every Claude provider configuration.
+- Sends `anthropic-workspace-id` for Anthropic API keys that are not scoped to a workspace.
+- Leaves the header absent for ordinary workspace-scoped Claude keys.
 
 ## Important source files
 
