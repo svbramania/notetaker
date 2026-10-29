@@ -98,6 +98,7 @@ enum RecipientSelectionPolicy {
 enum MeetingEmailLauncherError: LocalizedError {
     case couldNotCreateDraft
     case applicationUnavailable(String)
+    case applicationRejectedDraft(String)
 
     var errorDescription: String? {
         switch self {
@@ -105,7 +106,64 @@ enum MeetingEmailLauncherError: LocalizedError {
             return "The email draft could not be prepared."
         case .applicationUnavailable(let application):
             return "Install or enable \(application), then try again."
+        case .applicationRejectedDraft(let application):
+            return "macOS could not open the draft in \(application). Confirm the app is installed and selected as an email client, then retry."
         }
+    }
+}
+
+enum MeetingEmailDraftPreparationError: LocalizedError, Equatable {
+    case emailClientNotSelected
+    case senderAccountMissing
+    case recipientsMissing
+
+    var errorDescription: String? {
+        switch self {
+        case .emailClientNotSelected:
+            return "Select an email client in the Meeting tab before generating notes."
+        case .senderAccountMissing:
+            return "Enter a valid sender email account for the selected email client."
+        case .recipientsMissing:
+            return "Select at least one recipient, or enable Email everyone, before generating notes."
+        }
+    }
+}
+
+enum MeetingEmailDraftPreparation {
+    static func prepare(
+        notes: String,
+        meetingTitle: String,
+        recipients: [MeetingEmailRecipient],
+        emailEveryone: Bool,
+        lastRecipientEmail: String,
+        clientRawValue: String,
+        senderAccount: String
+    ) throws -> (draft: MeetingEmailDraft, client: MeetingEmailClient) {
+        guard let client = MeetingEmailClient(rawValue: clientRawValue) else {
+            throw MeetingEmailDraftPreparationError.emailClientNotSelected
+        }
+        guard MeetingEmailSenderAccount.isValid(senderAccount) else {
+            throw MeetingEmailDraftPreparationError.senderAccountMissing
+        }
+        let selected = emailEveryone
+            ? recipients.map(\.email)
+            : recipients
+                .filter {
+                    $0.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame
+                }
+                .map(\.email)
+        guard !selected.isEmpty else {
+            throw MeetingEmailDraftPreparationError.recipientsMissing
+        }
+        return (
+            MeetingEmailDraft(
+                recipients: selected,
+                subject: meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)",
+                body: notes,
+                senderAccount: senderAccount
+            ),
+            client
+        )
     }
 }
 
@@ -139,7 +197,7 @@ enum MeetingEmailDraftURLBuilder {
 
 @MainActor
 enum MeetingEmailLauncher {
-    static func launch(_ draft: MeetingEmailDraft, with client: MeetingEmailClient) throws {
+    static func launch(_ draft: MeetingEmailDraft, with client: MeetingEmailClient) async throws {
         guard let draftURL = MeetingEmailDraftURLBuilder.url(for: draft, client: client) else {
             throw MeetingEmailLauncherError.couldNotCreateDraft
         }
@@ -151,14 +209,27 @@ enum MeetingEmailLauncher {
             ) else {
                 throw MeetingEmailLauncherError.applicationUnavailable(client.rawValue)
             }
-            workspace.open(
-                [draftURL],
-                withApplicationAt: applicationURL,
-                configuration: NSWorkspace.OpenConfiguration(),
-                completionHandler: nil
-            )
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                workspace.open(
+                    [draftURL],
+                    withApplicationAt: applicationURL,
+                    configuration: NSWorkspace.OpenConfiguration()
+                ) { application, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if application == nil {
+                        continuation.resume(
+                            throwing: MeetingEmailLauncherError.applicationRejectedDraft(client.rawValue)
+                        )
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
         } else {
-            workspace.open(draftURL)
+            guard workspace.open(draftURL) else {
+                throw MeetingEmailLauncherError.applicationRejectedDraft(client.rawValue)
+            }
         }
     }
 }
