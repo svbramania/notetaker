@@ -31,17 +31,20 @@ struct APIProviderConfiguration: Codable, Equatable, Identifiable {
     var provider: MeetingNotesProvider
     var label: String
     var model: String
+    var workspaceID: String?
 
     init(
         id: UUID = UUID(),
         provider: MeetingNotesProvider,
         label: String,
-        model: String
+        model: String,
+        workspaceID: String? = nil
     ) {
         self.id = id
         self.provider = provider
         self.label = label
         self.model = model
+        self.workspaceID = workspaceID
     }
 }
 
@@ -411,7 +414,8 @@ struct MeetingNotesService {
         transcript: String,
         provider: MeetingNotesProvider,
         model: String,
-        apiKey: String
+        apiKey: String,
+        workspaceID: String? = nil
     ) async throws -> String {
         let generatedNotes: String
         switch provider {
@@ -425,7 +429,8 @@ struct MeetingNotesService {
             generatedNotes = try await generateWithClaude(
                 transcript: transcript,
                 model: model,
-                apiKey: apiKey
+                apiKey: apiKey,
+                workspaceID: workspaceID
             )
         }
         return MeetingNotesFormatter.finalize(generatedNotes, transcript: transcript)
@@ -455,13 +460,17 @@ struct MeetingNotesService {
     private func generateWithClaude(
         transcript: String,
         model: String,
-        apiKey: String
+        apiKey: String,
+        workspaceID: String?
     ) async throws -> String {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 180
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        Self.applyClaudeAuthentication(
+            to: &request,
+            apiKey: apiKey,
+            workspaceID: workspaceID
+        )
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model,
@@ -476,6 +485,19 @@ struct MeetingNotesService {
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.validate(data: data, response: response, provider: .claude)
         return try Self.parseClaudeResponse(data)
+    }
+
+    static func applyClaudeAuthentication(
+        to request: inout URLRequest,
+        apiKey: String,
+        workspaceID: String?
+    ) {
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        let trimmedWorkspaceID = workspaceID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmedWorkspaceID.isEmpty {
+            request.setValue(trimmedWorkspaceID, forHTTPHeaderField: "anthropic-workspace-id")
+        }
     }
 
     static func parseOpenAIResponse(_ data: Data) throws -> String {
