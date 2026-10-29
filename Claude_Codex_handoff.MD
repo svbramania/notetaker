@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.3
+Last updated: October 29, 2026 — Codex release 0.14.4
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.3`
+Current release: `0.14.4`
 
-Previous verified `main` commit: `a91de2d733cafc47d705e404a51f737b4228b9a3`; version 0.14.3 is the current local release candidate
+Previous verified `main` commit: `f69137f630eb57f37ac9530ec0e07587bf7b1b3c`; version 0.14.4 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/30
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/31
 
-The version 0.14.2 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.3 must pass the same workflow before merge.
+The version 0.14.3 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.4 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -141,6 +141,13 @@ ATTENDEES AND MEETING DETAILS
 - Added an optional Workspace ID field to every Claude provider configuration.
 - Sends `anthropic-workspace-id` for Anthropic API keys that are not scoped to a workspace.
 - Leaves the header absent for ordinary workspace-scoped Claude keys.
+
+## Version 0.14.4 changes
+
+- Replaced deprecated EventKit `.authorized` checks with macOS 14+ full calendar access checks.
+- Replaced deprecated AVAssetExportSession completion/status/error APIs with the macOS 15 async export API.
+- Preserved audio-export cancellation and the 60-second timeout.
+- Marked the generated Xcode project as reviewed by Xcode 26 through `project.yml`, while retaining its existing Xcode 16-compatible project format.
 
 ## Important source files
 
