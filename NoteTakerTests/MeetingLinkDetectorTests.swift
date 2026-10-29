@@ -513,6 +513,58 @@ final class MeetingNotesServiceTests: XCTestCase {
         )
     }
 
+    func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
+        let recipients = [MeetingEmailRecipient(name: "One", email: "one@example.com")]
+
+        XCTAssertThrowsError(
+            try MeetingEmailDraftPreparation.prepare(
+                notes: "Notes",
+                meetingTitle: "Planning",
+                recipients: recipients,
+                emailEveryone: true,
+                lastRecipientEmail: "",
+                clientRawValue: "",
+                senderAccount: "sender@example.com"
+            )
+        ) { error in
+            XCTAssertEqual(error as? MeetingEmailDraftPreparationError, .emailClientNotSelected)
+        }
+
+        XCTAssertThrowsError(
+            try MeetingEmailDraftPreparation.prepare(
+                notes: "Notes",
+                meetingTitle: "Planning",
+                recipients: recipients,
+                emailEveryone: false,
+                lastRecipientEmail: "missing@example.com",
+                clientRawValue: MeetingEmailClient.microsoftOutlook.rawValue,
+                senderAccount: "sender@example.com"
+            )
+        ) { error in
+            XCTAssertEqual(error as? MeetingEmailDraftPreparationError, .recipientsMissing)
+        }
+    }
+
+    func testAutomaticEmailDraftPreparationUsesRememberedRecipient() throws {
+        let prepared = try MeetingEmailDraftPreparation.prepare(
+            notes: "Formatted notes",
+            meetingTitle: "Planning",
+            recipients: [
+                MeetingEmailRecipient(name: "One", email: "one@example.com"),
+                MeetingEmailRecipient(name: "Two", email: "two@example.com")
+            ],
+            emailEveryone: false,
+            lastRecipientEmail: "TWO@example.com",
+            clientRawValue: MeetingEmailClient.microsoftOutlook.rawValue,
+            senderAccount: "sender@example.com"
+        )
+
+        XCTAssertEqual(prepared.client, .microsoftOutlook)
+        XCTAssertEqual(prepared.draft.recipients, ["two@example.com"])
+        XCTAssertEqual(prepared.draft.subject, "Meeting notes: Planning")
+        XCTAssertEqual(prepared.draft.body, "Formatted notes")
+    }
+
     func testAvailableEmailClientsOnlyIncludesInstalledDesktopApps() {
         XCTAssertEqual(
             MeetingEmailClient.available(

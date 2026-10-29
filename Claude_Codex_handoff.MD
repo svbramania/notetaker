@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.6
+Last updated: October 29, 2026 — Codex release 0.14.7
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.6`
+Current release: `0.14.7`
 
-Previous verified `main` commit: `07ae31306d665b5c7f70fc1d4f414bafa4f54b89`; version 0.14.6 is the current local release candidate
+Previous verified `main` commit: `63349763293928f08b6102ec69bf0aa1dceb58a6`; version 0.14.7 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.14.5 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.6 must pass the same workflow before merge.
+The version 0.14.6 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.7 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -161,6 +161,13 @@ ATTENDEES AND MEETING DETAILS
 - Added file-size and audio-track preflight checks before transcription chunk export.
 - Stops early with an actionable preserved-recording error when an audio file is empty, malformed, or has no audio track.
 - Treats CoreMedia PPS/reporting and debugger task-port messages as system diagnostics rather than application failures.
+
+## Version 0.14.7 changes
+
+- Validates the selected email client, sender account, and recipients before attempting automatic draft creation.
+- Waits for the macOS application-launch completion result instead of silently discarding it.
+- Reports note saving and email composition as separate outcomes; notes remain saved when draft creation fails.
+- Offers Retry for email composition without rerunning transcription or consuming another AI request.
 
 ## Important source files
 

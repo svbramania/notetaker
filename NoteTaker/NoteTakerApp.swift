@@ -26,9 +26,15 @@ private struct MeetingProcessingJob: Identifiable {
 }
 
 private struct MeetingProcessingFailure: Identifiable {
+    enum RetryAction {
+        case processing(MeetingProcessingJob)
+        case email(notes: String, job: MeetingProcessingJob)
+    }
+
     let id = UUID()
-    let job: MeetingProcessingJob
+    let title: String
     let message: String
+    let retryAction: RetryAction
 }
 
 @MainActor
@@ -162,10 +168,15 @@ struct ContentView: View {
         }
         .alert(item: $processingFailure) { failure in
             Alert(
-                title: Text("Meeting Notes Generation Failed"),
+                title: Text(failure.title),
                 message: Text(failure.message),
                 primaryButton: .default(Text("Retry")) {
-                    enqueueProcessing(failure.job, atFront: true)
+                    switch failure.retryAction {
+                    case .processing(let job):
+                        enqueueProcessing(job, atFront: true)
+                    case .email(let notes, let job):
+                        Task { await retryAutomaticEmail(notes: notes, job: job) }
+                    }
                 },
                 secondaryButton: .cancel(Text("Cancel"))
             )
@@ -759,7 +770,11 @@ struct ContentView: View {
             recorder.status = "Transcription cancelled — recordings preserved for retry"
         } catch {
             errorMessage = error.localizedDescription
-            processingFailure = MeetingProcessingFailure(job: job, message: error.localizedDescription)
+            processingFailure = MeetingProcessingFailure(
+                title: "Meeting Notes Generation Failed",
+                message: error.localizedDescription,
+                retryAction: .processing(job)
+            )
         }
     }
 
@@ -788,9 +803,20 @@ struct ContentView: View {
                     atomically: true,
                     encoding: .utf8
                 )
-                recorder.status = "Meeting notes generated and saved"
                 if autoOpenEmailDraftAfterNotes {
-                    prepareAutomaticEmail(notes: notes, job: job)
+                    do {
+                        try await prepareAutomaticEmail(notes: notes, job: job)
+                        recorder.status = "Meeting notes saved — email draft opened"
+                    } catch {
+                        recorder.status = "Meeting notes saved — email draft not opened"
+                        processingFailure = MeetingProcessingFailure(
+                            title: "Email Draft Could Not Be Opened",
+                            message: error.localizedDescription,
+                            retryAction: .email(notes: notes, job: job)
+                        )
+                    }
+                } else {
+                    recorder.status = "Meeting notes generated and saved — automatic email draft is off"
                 }
                 return
             } catch {
@@ -806,23 +832,34 @@ struct ContentView: View {
         throw lastError ?? MeetingNotesServiceError.invalidResponse
     }
 
-    private func prepareAutomaticEmail(notes: String, job: MeetingProcessingJob) {
-        guard let client = MeetingEmailClient(rawValue: emailClientRawValue) else { return }
-        let sender = UserDefaults.standard.string(forKey: client.senderAccountDefaultsKey) ?? ""
-        guard MeetingEmailSenderAccount.isValid(sender) else { return }
-        let selected = autoEmailEveryone
-            ? job.recipients.map(\.email)
-            : job.recipients.filter { $0.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame }.map(\.email)
-        guard !selected.isEmpty else { return }
-        try? MeetingEmailLauncher.launch(
-            MeetingEmailDraft(
-                recipients: selected,
-                subject: job.title.isEmpty ? "Meeting notes" : "Meeting notes: \(job.title)",
-                body: notes,
-                senderAccount: sender
-            ),
-            with: client
+    private func prepareAutomaticEmail(notes: String, job: MeetingProcessingJob) async throws {
+        let sender = MeetingEmailClient(rawValue: emailClientRawValue).flatMap {
+            UserDefaults.standard.string(forKey: $0.senderAccountDefaultsKey)
+        } ?? ""
+        let prepared = try MeetingEmailDraftPreparation.prepare(
+            notes: notes,
+            meetingTitle: job.title,
+            recipients: job.recipients,
+            emailEveryone: autoEmailEveryone,
+            lastRecipientEmail: lastRecipientEmail,
+            clientRawValue: emailClientRawValue,
+            senderAccount: sender
         )
+        try await MeetingEmailLauncher.launch(prepared.draft, with: prepared.client)
+    }
+
+    private func retryAutomaticEmail(notes: String, job: MeetingProcessingJob) async {
+        do {
+            try await prepareAutomaticEmail(notes: notes, job: job)
+            recorder.status = "Meeting notes saved — email draft opened"
+        } catch {
+            recorder.status = "Meeting notes saved — email draft not opened"
+            processingFailure = MeetingProcessingFailure(
+                title: "Email Draft Could Not Be Opened",
+                message: error.localizedDescription,
+                retryAction: .email(notes: notes, job: job)
+            )
+        }
     }
 
     private func refreshMeetingEmailClients() {
