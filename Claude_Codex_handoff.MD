@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.5
+Last updated: October 29, 2026 — Codex release 0.14.6
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.5`
+Current release: `0.14.6`
 
-Previous verified `main` commit: `4eee9e65cf2d9cf02592fe45aaff167b3dd2986a`; version 0.14.5 is the current local release candidate
+Previous verified `main` commit: `07ae31306d665b5c7f70fc1d4f414bafa4f54b89`; version 0.14.6 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/32
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.14.4 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.5 must pass the same workflow before merge.
+The version 0.14.5 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.6 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -154,6 +154,13 @@ ATTENDEES AND MEETING DETAILS
 - Prevented saved email-client preferences from becoming invalid SwiftUI picker selections while installed-client detection is still loading.
 - Applied the fix to both the Meeting-tab email automation picker and the completed-notes email picker.
 - Added regression tests for loading and already-available Outlook selections.
+
+## Version 0.14.6 changes
+
+- Routed transcription-progress model updates explicitly through the main actor.
+- Added file-size and audio-track preflight checks before transcription chunk export.
+- Stops early with an actionable preserved-recording error when an audio file is empty, malformed, or has no audio track.
+- Treats CoreMedia PPS/reporting and debugger task-port messages as system diagnostics rather than application failures.
 
 ## Important source files
 
