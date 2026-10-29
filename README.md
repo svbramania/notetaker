@@ -127,6 +127,8 @@ The full local transcript remains the source of truth. Both the ChatGPT handoff 
 - Spoken sign-off detection uses Apple's on-device live Speech recognition when the selected language is available. The four-second confirmation window allows continued conversation to cancel a pending stop.
 - Recordings created by version 0.13.0 and later use fragmented media for better recovery if the app exits unexpectedly. A recording interrupted before an older app version finalized its audio container may still be unreadable.
 
+Version 0.14.4 uses the current macOS 15 EventKit authorization state and AVFoundation async export APIs, while preserving cancellable, time-bounded audio chunk preparation.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
