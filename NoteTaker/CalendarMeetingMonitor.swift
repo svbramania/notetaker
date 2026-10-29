@@ -444,7 +444,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
 
     private func updateAuthorizationState() {
         let calendarStatus = EKEventStore.authorizationStatus(for: .event)
-        calendarAccessGranted = calendarStatus == .fullAccess || calendarStatus == .authorized
+        calendarAccessGranted = calendarStatus == .fullAccess
 
         notificationCenter.getNotificationSettings { [weak self] settings in
             Task { @MainActor in
