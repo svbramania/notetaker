@@ -31,6 +31,7 @@ private struct MeetingProcessingFailure: Identifiable {
     let message: String
 }
 
+@MainActor
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
     @StateObject private var calendarMonitor = CalendarMeetingMonitor()
@@ -685,10 +686,12 @@ struct ContentView: View {
                         source: .microphone,
                         meetingStart: job.startedAt
                     ) { progress in
-                        recorder.status = transcriptionStatus(
-                            track: "microphone",
-                            progress: progress
-                        )
+                        Task { @MainActor in
+                            recorder.status = transcriptionStatus(
+                                track: "microphone",
+                                progress: progress
+                            )
+                        }
                     }
                 } catch is CancellationError {
                     throw CancellationError()
@@ -709,10 +712,12 @@ struct ContentView: View {
                         source: .systemAudio,
                         meetingStart: job.startedAt
                     ) { progress in
-                        recorder.status = transcriptionStatus(
-                            track: "system audio",
-                            progress: progress
-                        )
+                        Task { @MainActor in
+                            recorder.status = transcriptionStatus(
+                                track: "system audio",
+                                progress: progress
+                            )
+                        }
                     }
                 } catch is CancellationError {
                     throw CancellationError()
