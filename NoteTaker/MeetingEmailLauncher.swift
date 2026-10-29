@@ -124,7 +124,7 @@ enum MeetingEmailDraftPreparationError: LocalizedError, Equatable {
         case .senderAccountMissing:
             return "Enter a valid sender email account for the selected email client."
         case .recipientsMissing:
-            return "Select at least one recipient, or enable Email everyone, before generating notes."
+            return "Enter at least one email address under Email recipients, then select it or enable Send to everyone."
         }
     }
 }
