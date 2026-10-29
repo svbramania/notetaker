@@ -228,7 +228,9 @@ struct CloudMeetingNotesView: View {
                             Spacer()
                             Text("\(selectedEmails.count) recipients selected")
                                 .foregroundStyle(.secondary)
-                            Button("Open Email Draft") { prepareEmail() }
+                            Button("Open Email Draft") {
+                                Task { await prepareEmail() }
+                            }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(
                                     selectedEmails.isEmpty
@@ -459,7 +461,7 @@ struct CloudMeetingNotesView: View {
                     if autoEmailEveryone {
                         selectedRecipientIDs = Set(recipients.map(\.id))
                     }
-                    prepareEmail()
+                    await prepareEmail()
                 }
                 return
             } catch {
@@ -497,7 +499,7 @@ struct CloudMeetingNotesView: View {
         )
     }
 
-    private func prepareEmail() {
+    private func prepareEmail() async {
         guard let selectedEmailClient else {
             status = "Choose Apple Mail, Microsoft Outlook, or Gmail first."
             return
@@ -516,7 +518,7 @@ struct CloudMeetingNotesView: View {
             senderAccount: MeetingEmailSenderAccount.normalized(trimmedSenderAccount)
         )
         do {
-            try MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
+            try await MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
             status = "\(selectedEmailClient.rawValue) opened with the addressed notes for review."
         } catch {
             status = error.localizedDescription
