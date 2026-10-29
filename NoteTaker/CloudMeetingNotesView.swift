@@ -187,8 +187,14 @@ struct CloudMeetingNotesView: View {
                         HStack {
                             Picker("Send with", selection: $emailClientRawValue) {
                                 Text("Choose an installed email client").tag("")
-                                ForEach(availableEmailClients) { client in
-                                    Text(client.rawValue).tag(client.rawValue)
+                                ForEach(
+                                    MeetingEmailClient.pickerValues(
+                                        available: availableEmailClients,
+                                        selectedRawValue: emailClientRawValue
+                                    ),
+                                    id: \.self
+                                ) { value in
+                                    Text(value).tag(value)
                                 }
                             }
                             .frame(width: 310)

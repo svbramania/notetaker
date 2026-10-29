@@ -630,6 +630,28 @@ final class MeetingNotesServiceTests: XCTestCase {
     }
 }
 
+final class MeetingEmailClientPickerTests: XCTestCase {
+    func testPickerIncludesSavedSelectionBeforeInstalledClientsLoad() {
+        XCTAssertEqual(
+            MeetingEmailClient.pickerValues(
+                available: [],
+                selectedRawValue: MeetingEmailClient.microsoftOutlook.rawValue
+            ),
+            [MeetingEmailClient.microsoftOutlook.rawValue]
+        )
+    }
+
+    func testPickerDoesNotDuplicateAvailableSavedSelection() {
+        XCTAssertEqual(
+            MeetingEmailClient.pickerValues(
+                available: [.appleMail, .microsoftOutlook],
+                selectedRawValue: MeetingEmailClient.microsoftOutlook.rawValue
+            ),
+            [MeetingEmailClient.appleMail.rawValue, MeetingEmailClient.microsoftOutlook.rawValue]
+        )
+    }
+}
+
 final class LocalScribeMergeTests: XCTestCase {
     func testRemovesSameSpeechCapturedByBothTracks() {
         let timestamp = Date(timeIntervalSince1970: 1_000)
