@@ -260,8 +260,14 @@ struct ContentView: View {
                 HStack {
                     Picker("Email client", selection: $emailClientRawValue) {
                         Text("Choose an installed email client").tag("")
-                        ForEach(availableMeetingEmailClients) { client in
-                            Text(client.rawValue).tag(client.rawValue)
+                        ForEach(
+                            MeetingEmailClient.pickerValues(
+                                available: availableMeetingEmailClients,
+                                selectedRawValue: emailClientRawValue
+                            ),
+                            id: \.self
+                        ) { value in
+                            Text(value).tag(value)
                         }
                     }
                     TextField("Sender account email", text: $meetingSenderAccount)
