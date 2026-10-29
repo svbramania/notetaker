@@ -135,6 +135,8 @@ Version 0.14.6 routes transcription progress through the main actor and validate
 
 Version 0.14.7 validates automatic-email settings, waits for macOS to accept the selected email-client launch request, and reports email-draft failures separately from successful note generation. Retry reopens the saved notes without rerunning transcription or the AI request.
 
+Version 0.14.8 adds a persistent Email recipients field to the Meeting tab. Calendar addresses and manually entered addresses are combined and shown as visible recipient checkboxes before notes are generated.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
