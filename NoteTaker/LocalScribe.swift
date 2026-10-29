@@ -148,40 +148,30 @@ private final class SpeechRecognitionOperationHolder: @unchecked Sendable {
 private final class AudioExportOperation: @unchecked Sendable {
     private let lock = NSLock()
     private let exporter: AVAssetExportSession
+    private let destination: URL
     private var continuation: CheckedContinuation<Void, Error>?
+    private var exportTask: Task<Void, Never>?
     private var timeoutTask: Task<Void, Never>?
     private var completed = false
 
     init(
         exporter: AVAssetExportSession,
+        destination: URL,
         continuation: CheckedContinuation<Void, Error>
     ) {
         self.exporter = exporter
+        self.destination = destination
         self.continuation = continuation
     }
 
     func start(timeout: TimeInterval) {
-        exporter.exportAsynchronously { [weak self] in
+        let exportTask = Task { [weak self] in
             guard let self else { return }
-            switch self.exporter.status {
-            case .completed:
+            do {
+                try await self.exporter.export(to: self.destination, as: .m4a)
                 self.finish(nil)
-            case .failed, .cancelled:
-                self.finish(
-                    self.exporter.error ?? NSError(
-                        domain: "NoteTaker",
-                        code: 31,
-                        userInfo: [NSLocalizedDescriptionKey: "Could not create an audio transcription chunk."]
-                    )
-                )
-            default:
-                self.finish(
-                    NSError(
-                        domain: "NoteTaker",
-                        code: 32,
-                        userInfo: [NSLocalizedDescriptionKey: "Audio transcription preparation did not finish."]
-                    )
-                )
+            } catch {
+                self.finish(error)
             }
         }
         let timeoutTask = Task { [weak self] in
@@ -196,14 +186,20 @@ private final class AudioExportOperation: @unchecked Sendable {
         lock.lock()
         if completed {
             lock.unlock()
+            exportTask.cancel()
             timeoutTask.cancel()
         } else {
+            self.exportTask = exportTask
             self.timeoutTask = timeoutTask
             lock.unlock()
         }
     }
 
     func cancel() {
+        lock.lock()
+        let exportTask = self.exportTask
+        lock.unlock()
+        exportTask?.cancel()
         exporter.cancelExport()
         finish(CancellationError())
     }
@@ -216,6 +212,7 @@ private final class AudioExportOperation: @unchecked Sendable {
         }
         completed = true
         self.continuation = nil
+        self.exportTask = nil
         let timeoutTask = self.timeoutTask
         self.timeoutTask = nil
         lock.unlock()
@@ -493,8 +490,6 @@ final class LocalScribe {
             )
         }
 
-        exporter.outputURL = destination
-        exporter.outputFileType = .m4a
         exporter.timeRange = CMTimeRange(
             start: CMTime(seconds: start, preferredTimescale: 600),
             duration: CMTime(seconds: duration, preferredTimescale: 600)
@@ -505,6 +500,7 @@ final class LocalScribe {
             try await withCheckedThrowingContinuation { continuation in
                 let operation = AudioExportOperation(
                     exporter: exporter,
+                    destination: destination,
                     continuation: continuation
                 )
                 holder.set(operation)
