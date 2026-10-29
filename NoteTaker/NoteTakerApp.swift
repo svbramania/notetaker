@@ -769,7 +769,8 @@ struct ContentView: View {
                     transcript: transcript,
                     provider: configuration.provider,
                     model: configuration.model,
-                    apiKey: key
+                    apiKey: key,
+                    workspaceID: configuration.workspaceID
                 )
                 try notes.write(
                     to: job.sessionDirectory.appendingPathComponent("meeting-notes.md"),
