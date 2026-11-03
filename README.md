@@ -137,6 +137,8 @@ Version 0.14.7 validates automatic-email settings, waits for macOS to accept the
 
 Version 0.14.8 adds a persistent Email recipients field to the Meeting tab. Calendar addresses and manually entered addresses are combined and shown as visible recipient checkboxes before notes are generated.
 
+Version 0.14.9 shows connected calendar providers, account names, and calendar names directly in Settings. Add Calendar Account opens macOS Internet Accounts, while Refresh Accounts discovers newly connected Gmail, Outlook, Exchange, iCloud, CalDAV, and local calendars.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
