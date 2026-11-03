@@ -74,6 +74,7 @@ struct ContentView: View {
     @AppStorage("autoOpenEmailDraftAfterNotes") private var autoOpenEmailDraftAfterNotes = true
     @AppStorage("autoEmailEveryone") private var autoEmailEveryone = false
     @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
+    @AppStorage("selectedMeetingNotesRecipientEmails") private var selectedRecipientEmailsData = ""
     @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
     @AppStorage("manualMeetingEmailRecipients") private var manualEmailRecipients = ""
 
@@ -261,11 +262,11 @@ struct ContentView: View {
                             isOn: Binding(
                                 get: {
                                     autoEmailEveryone
-                                        || recipient.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame
+                                        || selectedAutomaticRecipientEmails.contains(recipient.email.lowercased())
                                 },
                                 set: { selected in
                                     autoEmailEveryone = false
-                                    lastRecipientEmail = selected ? recipient.email : ""
+                                    setAutomaticRecipient(recipient.email, selected: selected)
                                 }
                             )
                         ) {
@@ -517,6 +518,28 @@ struct ContentView: View {
                 + EmailAddressExtractor.recipients(in: attendees)
                 + EmailAddressExtractor.recipients(in: manualEmailRecipients)
         )
+    }
+
+    private var selectedAutomaticRecipientEmails: Set<String> {
+        RecipientSelectionPolicy.rememberedEmails(
+            encodedSelection: selectedRecipientEmailsData,
+            lastSelectedEmail: lastRecipientEmail
+        )
+    }
+
+    private func setAutomaticRecipient(_ email: String, selected: Bool) {
+        var selection = selectedAutomaticRecipientEmails
+        let normalized = email.lowercased()
+        if selected {
+            selection.insert(normalized)
+            lastRecipientEmail = email
+        } else {
+            selection.remove(normalized)
+            if lastRecipientEmail.localizedCaseInsensitiveCompare(email) == .orderedSame {
+                lastRecipientEmail = selection.sorted().first ?? ""
+            }
+        }
+        selectedRecipientEmailsData = RecipientSelectionPolicy.encodedSelection(selection)
     }
 
     private var isMeetingNotesGenerationActive: Bool {
@@ -896,7 +919,7 @@ struct ContentView: View {
             meetingTitle: job.title,
             recipients: job.recipients,
             emailEveryone: autoEmailEveryone,
-            lastRecipientEmail: lastRecipientEmail,
+            selectedRecipientEmails: selectedAutomaticRecipientEmails,
             clientRawValue: emailClientRawValue,
             senderAccount: sender
         )
