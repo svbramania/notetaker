@@ -460,6 +460,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertEqual(
             RecipientSelectionPolicy.initialSelection(
                 from: recipients,
+                encodedSelection: "",
                 lastSelectedEmail: "TWO@example.com"
             ),
             ["two@example.com"]
@@ -467,6 +468,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(
             RecipientSelectionPolicy.initialSelection(
                 from: recipients,
+                encodedSelection: "",
                 lastSelectedEmail: ""
             ).isEmpty
         )
@@ -522,7 +524,7 @@ final class MeetingNotesServiceTests: XCTestCase {
                 meetingTitle: "Planning",
                 recipients: recipients,
                 emailEveryone: true,
-                lastRecipientEmail: "",
+                selectedRecipientEmails: [],
                 clientRawValue: "",
                 senderAccount: "sender@example.com"
             )
@@ -536,7 +538,7 @@ final class MeetingNotesServiceTests: XCTestCase {
                 meetingTitle: "Planning",
                 recipients: recipients,
                 emailEveryone: false,
-                lastRecipientEmail: "missing@example.com",
+                selectedRecipientEmails: ["missing@example.com"],
                 clientRawValue: MeetingEmailClient.microsoftOutlook.rawValue,
                 senderAccount: "sender@example.com"
             )
@@ -554,7 +556,7 @@ final class MeetingNotesServiceTests: XCTestCase {
                 MeetingEmailRecipient(name: "Two", email: "two@example.com")
             ],
             emailEveryone: false,
-            lastRecipientEmail: "TWO@example.com",
+            selectedRecipientEmails: ["two@example.com"],
             clientRawValue: MeetingEmailClient.microsoftOutlook.rawValue,
             senderAccount: "sender@example.com"
         )
@@ -563,6 +565,34 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertEqual(prepared.draft.recipients, ["two@example.com"])
         XCTAssertEqual(prepared.draft.subject, "Meeting notes: Planning")
         XCTAssertEqual(prepared.draft.body, "Formatted notes")
+    }
+
+    func testMultipleRecipientSelectionsPersistAndPrepareTogether() throws {
+        let saved = RecipientSelectionPolicy.encodedSelection([
+            "one@example.com",
+            "two@example.com"
+        ])
+        let remembered = RecipientSelectionPolicy.rememberedEmails(
+            encodedSelection: saved,
+            lastSelectedEmail: "ignored@example.com"
+        )
+        XCTAssertEqual(remembered, ["one@example.com", "two@example.com"])
+
+        let prepared = try MeetingEmailDraftPreparation.prepare(
+            notes: "Notes",
+            meetingTitle: "Planning",
+            recipients: [
+                MeetingEmailRecipient(name: "One", email: "one@example.com"),
+                MeetingEmailRecipient(name: "Two", email: "two@example.com"),
+                MeetingEmailRecipient(name: "Three", email: "three@example.com")
+            ],
+            emailEveryone: false,
+            selectedRecipientEmails: remembered,
+            clientRawValue: MeetingEmailClient.appleMail.rawValue,
+            senderAccount: "sender@example.com"
+        )
+
+        XCTAssertEqual(prepared.draft.recipients, ["one@example.com", "two@example.com"])
     }
 
     func testAvailableEmailClientsOnlyIncludesInstalledDesktopApps() {

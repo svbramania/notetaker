@@ -139,6 +139,8 @@ Version 0.14.8 adds a persistent Email recipients field to the Meeting tab. Cale
 
 Version 0.14.9 shows connected calendar providers, account names, and calendar names directly in Settings. Add Calendar Account opens macOS Internet Accounts, while Refresh Accounts discovers newly connected Gmail, Outlook, Exchange, iCloud, CalDAV, and local calendars.
 
+Version 0.15.0 allows multiple individual email recipients to remain selected simultaneously and persists that selection across launches. Send to everyone remains an independent override.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.

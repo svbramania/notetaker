@@ -81,15 +81,47 @@ enum MeetingEmailSenderAccount {
 }
 
 enum RecipientSelectionPolicy {
-    static func initialSelection(
-        from recipients: [MeetingEmailRecipient],
+    static func decodedSelection(_ value: String) -> Set<String>? {
+        guard !value.isEmpty,
+              let data = value.data(using: .utf8),
+              let emails = try? JSONDecoder().decode([String].self, from: data) else {
+            return nil
+        }
+        return Set(emails.map { $0.lowercased() })
+    }
+
+    static func encodedSelection(_ emails: Set<String>) -> String {
+        let normalized = emails.map { $0.lowercased() }.sorted()
+        guard let data = try? JSONEncoder().encode(normalized),
+              let value = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return value
+    }
+
+    static func rememberedEmails(
+        encodedSelection: String,
         lastSelectedEmail: String
     ) -> Set<String> {
+        if let decoded = decodedSelection(encodedSelection) {
+            return decoded
+        }
         let remembered = lastSelectedEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !remembered.isEmpty else { return [] }
+        return remembered.isEmpty ? [] : [remembered.lowercased()]
+    }
+
+    static func initialSelection(
+        from recipients: [MeetingEmailRecipient],
+        encodedSelection: String,
+        lastSelectedEmail: String
+    ) -> Set<String> {
+        let remembered = rememberedEmails(
+            encodedSelection: encodedSelection,
+            lastSelectedEmail: lastSelectedEmail
+        )
         return Set(
             recipients
-                .filter { $0.email.localizedCaseInsensitiveCompare(remembered) == .orderedSame }
+                .filter { remembered.contains($0.email.lowercased()) }
                 .map(\.id)
         )
     }
@@ -135,7 +167,7 @@ enum MeetingEmailDraftPreparation {
         meetingTitle: String,
         recipients: [MeetingEmailRecipient],
         emailEveryone: Bool,
-        lastRecipientEmail: String,
+        selectedRecipientEmails: Set<String>,
         clientRawValue: String,
         senderAccount: String
     ) throws -> (draft: MeetingEmailDraft, client: MeetingEmailClient) {
@@ -149,7 +181,7 @@ enum MeetingEmailDraftPreparation {
             ? recipients.map(\.email)
             : recipients
                 .filter {
-                    $0.email.localizedCaseInsensitiveCompare(lastRecipientEmail) == .orderedSame
+                    selectedRecipientEmails.contains($0.email.lowercased())
                 }
                 .map(\.email)
         guard !selected.isEmpty else {
