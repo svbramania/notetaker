@@ -10,6 +10,7 @@ struct CloudMeetingNotesView: View {
 
     @AppStorage("autoFallbackOnAPIQuotaLimit") private var autoFallbackOnQuotaLimit = false
     @AppStorage("lastMeetingNotesRecipientEmail") private var lastRecipientEmail = ""
+    @AppStorage("selectedMeetingNotesRecipientEmails") private var selectedRecipientEmailsData = ""
     @AppStorage("preferredMeetingEmailClient") private var emailClientRawValue = ""
     @AppStorage("autoOpenEmailDraftAfterNotes") private var autoOpenEmailDraftAfterNotes = true
     @AppStorage("autoEmailEveryone") private var autoEmailEveryone = false
@@ -37,7 +38,9 @@ struct CloudMeetingNotesView: View {
                     && selectedRecipientIDs == Set(recipients.map(\.id))
             },
             set: { selectEveryone in
-                selectedRecipientIDs = selectEveryone ? Set(recipients.map(\.id)) : []
+                let selection = selectEveryone ? Set(recipients.map(\.id)) : []
+                selectedRecipientIDs = selection
+                persistRecipientSelection(selection)
             }
         )
     }
@@ -162,12 +165,15 @@ struct CloudMeetingNotesView: View {
                                 isOn: Binding(
                                     get: { selectedRecipientIDs.contains(recipient.id) },
                                     set: { selected in
+                                        var selection = selectedRecipientIDs
                                         if selected {
-                                            selectedRecipientIDs.insert(recipient.id)
+                                            selection.insert(recipient.id)
                                             lastRecipientEmail = recipient.email
                                         } else {
-                                            selectedRecipientIDs.remove(recipient.id)
+                                            selection.remove(recipient.id)
                                         }
+                                        selectedRecipientIDs = selection
+                                        persistRecipientSelection(selection)
                                     }
                                 )
                             ) {
@@ -263,6 +269,7 @@ struct CloudMeetingNotesView: View {
             recipients = EmailAddressExtractor.merged(updatedRecipients)
             selectedRecipientIDs = RecipientSelectionPolicy.initialSelection(
                 from: recipients,
+                encodedSelection: selectedRecipientEmailsData,
                 lastSelectedEmail: lastRecipientEmail
             )
         }
@@ -523,6 +530,15 @@ struct CloudMeetingNotesView: View {
         } catch {
             status = error.localizedDescription
         }
+    }
+
+    private func persistRecipientSelection(_ selection: Set<String>) {
+        let emails = Set(
+            recipients
+                .filter { selection.contains($0.id) }
+                .map { $0.email.lowercased() }
+        )
+        selectedRecipientEmailsData = RecipientSelectionPolicy.encodedSelection(emails)
     }
 
     private func refreshAvailableEmailClients() {
