@@ -100,6 +100,32 @@ enum CalendarAccountProvider {
     }
 }
 
+@MainActor
+enum CalendarAccountSettings {
+    static func open(using workspace: NSWorkspace = .shared) {
+        let destinations = [
+            "x-apple.systempreferences:com.apple.Internet-Accounts-Settings.extension",
+            "x-apple.systempreferences:com.apple.preferences.internetaccounts"
+        ]
+
+        for destination in destinations {
+            if let url = URL(string: destination), workspace.open(url) {
+                return
+            }
+        }
+
+        if let settingsURL = workspace.urlForApplication(
+            withBundleIdentifier: "com.apple.systempreferences"
+        ) {
+            workspace.openApplication(
+                at: settingsURL,
+                configuration: NSWorkspace.OpenConfiguration(),
+                completionHandler: nil
+            )
+        }
+    }
+}
+
 enum CalendarMeetingTimeline {
     static func activeMeeting(
         in meetings: [UpcomingVideoMeeting],

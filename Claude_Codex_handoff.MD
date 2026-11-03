@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: October 29, 2026 — Codex release 0.14.8
+Last updated: November 3, 2026 — Codex release 0.14.9
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.14.8`
+Current release: `0.14.9`
 
-Previous verified `main` commit: `afb8422ae84ebe46d3ce10a2ae117ced54ae45ad`; version 0.14.8 is the current local release candidate
+Previous verified `main` commit: `5cc0ee7166ea1211ff0890eefed3de10cb980580`; version 0.14.9 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.14.7 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.8 must pass the same workflow before merge.
+The version 0.14.8 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.14.9 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -175,6 +175,13 @@ ATTENDEES AND MEETING DETAILS
 - Combines manually entered addresses with calendar and attendee addresses.
 - Displays every valid address as a selectable recipient before note generation.
 - Rewords missing-recipient errors to point directly to the visible control.
+
+## Version 0.14.9 changes
+
+- Shows connected calendar providers, account names, and calendar names directly in Settings.
+- Adds Add Calendar Account controls to Settings and the calendar-selection window.
+- Opens macOS Internet Accounts because EventKit does not permit a third-party app to add Google or Microsoft credentials directly.
+- Adds an explicit Refresh Accounts action for newly connected accounts and calendars.
 
 ## Important source files
 

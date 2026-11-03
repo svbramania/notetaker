@@ -332,6 +332,49 @@ struct ContentView: View {
                     } else {
                         Button("Choose Calendars") { showsCalendarSelection = true }
                     }
+                    Button("Add Calendar Account…") {
+                        CalendarAccountSettings.open()
+                    }
+                }
+
+                if calendarMonitor.calendarAccessGranted {
+                    Divider()
+                    Text("Connected calendar accounts")
+                        .font(.subheadline.bold())
+
+                    if calendarMonitor.calendarAccounts.isEmpty {
+                        Text("No calendar accounts were found. Add an account, then return to NoteTaker and click Refresh.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(calendarMonitor.calendarAccounts) { account in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "calendar")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.name)
+                                    Text("\(account.providerName) • \(account.calendars.count) calendar\(account.calendars.count == 1 ? "" : "s")")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(account.calendars.map(\.title).joined(separator: ", "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button("Refresh Accounts") {
+                            Task { await calendarMonitor.refresh() }
+                        }
+                        Spacer()
+                        Text("\(calendarMonitor.calendarAccounts.count) account\(calendarMonitor.calendarAccounts.count == 1 ? "" : "s") • \(calendarMonitor.includedCalendarCount) calendars selected")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .padding(6)
@@ -1025,6 +1068,9 @@ struct CalendarSelectionView: View {
                 }
                 Button("Clear Selection") {
                     calendarMonitor.clearCalendarSelection()
+                }
+                Button("Add Calendar Account…") {
+                    CalendarAccountSettings.open()
                 }
                 Spacer()
                 Text("\(calendarMonitor.includedCalendarCount) selected")
