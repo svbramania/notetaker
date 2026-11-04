@@ -69,6 +69,65 @@ struct MeetingEmailDraft: Equatable {
     let senderAccount: String
 }
 
+enum MeetingNotesEmailFormatter {
+    static func format(_ notes: String) -> String {
+        let normalized = notes
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        var output: [String] = []
+        var previousWasBlank = false
+        for rawLine in normalized.components(separatedBy: .newlines) {
+            var line = rawLine.replacingOccurrences(
+                of: #"^\s*#{1,6}\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+            line = line.replacingOccurrences(of: "**", with: "")
+
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if !previousWasBlank, !output.isEmpty { output.append("") }
+                previousWasBlank = true
+                continue
+            }
+
+            previousWasBlank = false
+            if let bullet = bulletComponents(in: line) {
+                let level = max(0, bullet.leadingSpaces / 2)
+                let indentation = String(repeating: "    ", count: level)
+                let marker = level == 0 ? "•" : "◦"
+                output.append("\(indentation)\(marker) \(bullet.text)")
+            } else {
+                output.append(line.trimmingCharacters(in: .whitespaces))
+            }
+        }
+
+        while output.last == "" { output.removeLast() }
+        return output.joined(separator: "\n")
+    }
+
+    private static func bulletComponents(in line: String) -> (
+        leadingSpaces: Int,
+        text: String
+    )? {
+        let pattern = #"^(\s*)[-*+]\s+(.+)$"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: line,
+                range: NSRange(line.startIndex..<line.endIndex, in: line)
+              ),
+              let whitespaceRange = Range(match.range(at: 1), in: line),
+              let textRange = Range(match.range(at: 2), in: line) else {
+            return nil
+        }
+        let whitespace = line[whitespaceRange]
+        let leadingSpaces = whitespace.reduce(0) { count, character in
+            count + (character == "\t" ? 2 : 1)
+        }
+        return (leadingSpaces, String(line[textRange]))
+    }
+}
+
 enum MeetingEmailSenderAccount {
     static func normalized(_ account: String) -> String {
         account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -191,7 +250,7 @@ enum MeetingEmailDraftPreparation {
             MeetingEmailDraft(
                 recipients: selected,
                 subject: meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)",
-                body: notes,
+                body: MeetingNotesEmailFormatter.format(notes),
                 senderAccount: senderAccount
             ),
             client
