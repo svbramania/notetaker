@@ -693,7 +693,7 @@ final class LocalScribe {
         return """
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
-        Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Start with KEY FINANCIAL AMOUNTS only when a monetary amount appears in the transcript. If there is no monetary amount, omit that section entirely and begin with the executive summary. Do not promote dates, counts, percentages, quantities, or durations to the top merely because they are numbers. Then use this structure:
+        Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Use the Unicode bullet “•” for primary bullet points and “◦” for nested bullet points. Indent every nested bullet by four spaces. Never use hyphens or asterisks as bullet markers. Start with KEY FINANCIAL AMOUNTS only when a monetary amount appears in the transcript. If there is no monetary amount, omit that section entirely and begin with the executive summary. Do not promote dates, counts, percentages, quantities, or durations to the top merely because they are numbers. Then use this structure:
         1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts
         2. DECISIONS MADE
         3. ACTION ITEMS — format each action as a numbered line with owner, due date, and status; write "Not stated" when an owner or date is absent
@@ -703,6 +703,8 @@ final class LocalScribe {
         7. ATTENDEES AND MEETING DETAILS
 
         Keep names, numbers, dates, commitments, and qualifications accurate. Clearly label anything unclear in the transcript. Do not invent missing information.
+
+        Speaker attribution rules: source labels such as Mic and System identify audio channels, not people. Follow the chronological dialogue. When one utterance directly addresses a person by name and asks that person a question, treat the name as the addressee, not as the speaker of the question. If the immediately following utterance is a responsive answer, attribute that answer to the named addressee only when the adjacency and content strongly support it. Never attribute the question itself to the person being addressed. Maintain a consistent identity once supported. When attribution is uncertain, write “Unidentified participant” instead of guessing.
 
         REQUIRED FINANCIAL EVIDENCE
         Include every applicable line below in the financial section:

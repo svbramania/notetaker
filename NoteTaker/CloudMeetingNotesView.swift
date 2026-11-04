@@ -521,7 +521,7 @@ struct CloudMeetingNotesView: View {
         let draft = MeetingEmailDraft(
             recipients: selectedEmails,
             subject: meetingTitle.isEmpty ? "Meeting notes" : "Meeting notes: \(meetingTitle)",
-            body: generatedNotes,
+            body: MeetingNotesEmailFormatter.format(generatedNotes),
             senderAccount: MeetingEmailSenderAccount.normalized(trimmedSenderAccount)
         )
         do {
