@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 3, 2026 — Codex release 0.15.0
+Last updated: November 4, 2026 — Codex release 0.15.1
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.0`
+Current release: `0.15.1`
 
-Previous verified `main` commit: `e11ad45f8f8ba1476768b668c79728a1dc7645ad`; version 0.15.0 is the current local release candidate
+Previous verified `main` commit: `22864a9a1d6da031827ed1a6fe7dd996d6478da1`; version 0.15.1 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.14.9 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.0 must pass the same workflow before merge.
+The version 0.15.0 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.1 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -189,6 +189,14 @@ ATTENDEES AND MEETING DETAILS
 - Allows any number of individual recipient checkboxes to remain selected simultaneously.
 - Migrates the previously remembered recipient into the new selection automatically.
 - Keeps Send to everyone as an independent override and adds multi-recipient regression coverage.
+
+## Version 0.15.1 changes
+
+- Converts Markdown hyphen and asterisk list markers to Unicode primary and nested bullets before email composition.
+- Preserves nested list structure with four-space indentation and leaves hyphens inside ordinary text unchanged.
+- Instructs both API providers and the no-key ChatGPT handoff to produce email-ready Unicode bullets.
+- Adds cautious conversational speaker attribution: a name in a question is the addressee, and the next responsive turn may be assigned to that person only when strongly supported.
+- Uses “Unidentified participant” whenever speaker identity remains ambiguous.
 
 ## Important source files
 
