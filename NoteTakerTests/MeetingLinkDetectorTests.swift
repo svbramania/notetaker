@@ -334,6 +334,9 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Pyramid Principle"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Remove any hashtags and fix the formatting"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Do not use Markdown heading symbols"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Unicode bullet"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("treat the name as the addressee"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Unidentified participant"))
     }
 
     func testCapturesMoneyWithSessionContext() {
@@ -405,6 +408,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("$1800 for 6 sessions"))
         XCTAssertTrue(prompt.contains("REQUIRED FINANCIAL EVIDENCE"))
         XCTAssertTrue(prompt.contains("Remove any hashtags and fix the formatting"))
+        XCTAssertTrue(prompt.contains("Unicode bullet"))
+        XCTAssertTrue(prompt.contains("treat the name as the addressee"))
     }
 
     func testFormatterRemovesMarkdownHeadingHashesAndBoldMarkers() {
@@ -513,6 +518,35 @@ final class MeetingNotesServiceTests: XCTestCase {
             gmailComponents.queryItems?.first(where: { $0.name == "authuser" })?.value,
             draft.senderAccount
         )
+    }
+
+    func testEmailFormatterUsesRealBulletsAndNestedIndentation() {
+        let formatted = MeetingNotesEmailFormatter.format(
+            """
+            ## EXECUTIVE SUMMARY
+            - Primary conclusion
+              - Supporting detail
+                * Deeper qualification
+
+            ACTION ITEMS
+            - Follow-up with the post-meeting team
+            """
+        )
+
+        XCTAssertEqual(
+            formatted,
+            """
+            EXECUTIVE SUMMARY
+            • Primary conclusion
+                ◦ Supporting detail
+                    ◦ Deeper qualification
+
+            ACTION ITEMS
+            • Follow-up with the post-meeting team
+            """
+        )
+        XCTAssertFalse(formatted.contains("\n- "))
+        XCTAssertTrue(formatted.contains("post-meeting"))
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
