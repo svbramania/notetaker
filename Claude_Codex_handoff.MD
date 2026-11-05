@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 5, 2026 — Codex release 0.15.2
+Last updated: November 5, 2026 — Codex release 0.15.3
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.2`
+Current release: `0.15.3`
 
-Previous verified `main` commit: `7d9869ea71bdf4eb1df3fd379e48c058bdf188db`; version 0.15.2 is the current local release candidate
+Previous verified `main` commit: `cb19cb20d32dfacb68d35dd21c47e89cd5d472dc`; version 0.15.3 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.15.1 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.2 must pass the same workflow before merge.
+The version 0.15.2 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.3 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -210,6 +210,16 @@ ATTENDEES AND MEETING DETAILS
 - Stops treating a nil `NSRunningApplication` completion object as failure when macOS supplies no launch error.
 - Detects oversized `mailto:` URLs and retries rejected full-body launches with a shorter addressed draft.
 - Copies the complete formatted notes during fallback and instructs the user to press Command-V in the draft body.
+
+## Version 0.15.3 changes
+
+- Removes NoteTaker's fixed 88-character wrapping from email bullets.
+- Builds the email body as an `NSAttributedString` with real tab stops and hanging paragraph indents.
+- Keeps each bullet as one logical paragraph so the email client wraps it to its actual composer width and continuation text aligns beneath the first character after the bullet.
+- Bolds uppercase section headings and preserves a distinct indent for genuine nested bullets.
+- Uses `NSSharingService.composeEmail` when the selected native client is also the Mac's default email client.
+- For an explicitly selected non-default client, opens an addressed draft and copies both rich-text and plain-text representations for Command-V.
+- Adds regression coverage for artificial line breaks, primary and nested hanging indents, and RTF generation.
 
 ## Important source files
 

@@ -1,3 +1,4 @@
+import AppKit
 import EventKit
 import XCTest
 @testable import NoteTaker
@@ -565,28 +566,71 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(formatted.contains("post-meeting"))
     }
 
-    func testEmailFormatterAddsHangingIndentToWrappedBullets() {
+    func testEmailFormatterDoesNotArtificiallyWrapLongPrimaryBullets() {
         let formatted = MeetingNotesEmailFormatter.format(
             "• This primary bullet contains enough words to wrap onto another line while keeping its continuation aligned with the text after the bullet instead of returning to the left margin of the email."
         )
         let lines = formatted.components(separatedBy: .newlines)
 
-        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix("• "))
-        XCTAssertTrue(lines[1].hasPrefix("\u{00A0}\u{00A0}"))
-        XCTAssertFalse(lines[1].hasPrefix("•"))
-        XCTAssertLessThanOrEqual(lines[0].count, 88)
+        XCTAssertTrue(lines[0].hasSuffix("email."))
     }
 
-    func testEmailFormatterPreservesNestedIndentOnWrappedContinuation() {
+    func testEmailFormatterDoesNotArtificiallyWrapLongNestedBullets() {
         let formatted = MeetingNotesEmailFormatter.format(
             "    ◦ This nested bullet also contains enough words to wrap and must keep both its nesting indentation and its hanging continuation indentation in Outlook and other email clients."
         )
         let lines = formatted.components(separatedBy: .newlines)
 
-        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix(String(repeating: "\u{00A0}", count: 4) + "◦ "))
-        XCTAssertTrue(lines[1].hasPrefix(String(repeating: "\u{00A0}", count: 6)))
+        XCTAssertTrue(lines[0].hasSuffix("clients."))
+    }
+
+    func testRichTextFormatterUsesHangingIndentsAndNaturalWrapping() throws {
+        let formatted = MeetingNotesRichTextFormatter.format(
+            """
+            DECISIONS MADE
+            • A long primary decision that should remain one paragraph and wrap at the email client's available width.
+                ◦ A nested supporting point that should remain aligned beneath its own text.
+            """
+        )
+        let primaryRange = try XCTUnwrap(formatted.string.range(of: "•\t"))
+        let primaryIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: primaryRange.lowerBound
+        )
+        let primaryStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: primaryIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(primaryStyle.firstLineHeadIndent, 0)
+        XCTAssertEqual(primaryStyle.headIndent, 18)
+
+        let nestedRange = try XCTUnwrap(formatted.string.range(of: "◦\t"))
+        let nestedIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: nestedRange.lowerBound
+        )
+        let nestedStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: nestedIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(nestedStyle.firstLineHeadIndent, 18)
+        XCTAssertEqual(nestedStyle.headIndent, 36)
+        XCTAssertFalse(formatted.string.contains("\n\u{00A0}"))
+    }
+
+    func testRichTextFormatterProducesRTFData() throws {
+        let formatted = MeetingNotesRichTextFormatter.format(
+            "DECISIONS MADE\n• Continue with the candidate."
+        )
+        let data = try formatted.data(
+            from: NSRange(location: 0, length: formatted.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        XCTAssertFalse(data.isEmpty)
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
