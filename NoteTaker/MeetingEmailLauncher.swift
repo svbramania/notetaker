@@ -70,6 +70,9 @@ struct MeetingEmailDraft: Equatable {
 }
 
 enum MeetingNotesEmailFormatter {
+    private static let maximumLineLength = 88
+    private static let nonbreakingSpace = "\u{00A0}"
+
     static func format(_ notes: String) -> String {
         let normalized = notes
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -93,10 +96,21 @@ enum MeetingNotesEmailFormatter {
 
             previousWasBlank = false
             if let bullet = bulletComponents(in: line) {
-                let level = max(0, bullet.leadingSpaces / 2)
-                let indentation = String(repeating: "    ", count: level)
+                let level = bullet.marker == "◦"
+                    ? max(1, bullet.leadingSpaces / 4)
+                    : max(0, bullet.leadingSpaces / 2)
+                let indentation = String(
+                    repeating: nonbreakingSpace,
+                    count: level * 4
+                )
                 let marker = level == 0 ? "•" : "◦"
-                output.append("\(indentation)\(marker) \(bullet.text)")
+                output.append(
+                    contentsOf: wrappedBulletLines(
+                        text: bullet.text,
+                        indentation: indentation,
+                        marker: marker
+                    )
+                )
             } else {
                 output.append(line.trimmingCharacters(in: .whitespaces))
             }
@@ -108,23 +122,58 @@ enum MeetingNotesEmailFormatter {
 
     private static func bulletComponents(in line: String) -> (
         leadingSpaces: Int,
+        marker: String,
         text: String
     )? {
-        let pattern = #"^(\s*)[-*+]\s+(.+)$"#
+        let pattern = #"^(\s*)([-*+•◦])\s+(.+)$"#
         guard let expression = try? NSRegularExpression(pattern: pattern),
               let match = expression.firstMatch(
                 in: line,
                 range: NSRange(line.startIndex..<line.endIndex, in: line)
               ),
               let whitespaceRange = Range(match.range(at: 1), in: line),
-              let textRange = Range(match.range(at: 2), in: line) else {
+              let markerRange = Range(match.range(at: 2), in: line),
+              let textRange = Range(match.range(at: 3), in: line) else {
             return nil
         }
         let whitespace = line[whitespaceRange]
         let leadingSpaces = whitespace.reduce(0) { count, character in
             count + (character == "\t" ? 2 : 1)
         }
-        return (leadingSpaces, String(line[textRange]))
+        return (
+            leadingSpaces,
+            String(line[markerRange]),
+            String(line[textRange])
+        )
+    }
+
+    private static func wrappedBulletLines(
+        text: String,
+        indentation: String,
+        marker: String
+    ) -> [String] {
+        let firstPrefix = "\(indentation)\(marker) "
+        let continuationPrefix = indentation
+            + String(repeating: nonbreakingSpace, count: 2)
+        let words = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard !words.isEmpty else { return [firstPrefix] }
+
+        var lines: [String] = []
+        var prefix = firstPrefix
+        var current = prefix
+        for word in words {
+            let separator = current == prefix ? "" : " "
+            if current.count + separator.count + word.count > maximumLineLength,
+               current != prefix {
+                lines.append(current)
+                prefix = continuationPrefix
+                current = prefix + word
+            } else {
+                current += separator + word
+            }
+        }
+        lines.append(current)
+        return lines
     }
 }
 
