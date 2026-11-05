@@ -67,6 +67,7 @@ struct ContentView: View {
     @State private var selectedSavedMeetingID = ""
     @State private var availableMeetingEmailClients: [MeetingEmailClient] = []
     @State private var meetingSenderAccount = ""
+    @State private var isOpeningSavedEmailDraft = false
     @AppStorage("autoRecordCalendarMeetings") private var autoRecordCalendarMeetings = true
     @AppStorage("autoStopOnSpokenSignOff") private var autoStopOnSpokenSignOff = true
     @AppStorage("calendarAlertsEnabled") private var calendarAlertsEnabled = true
@@ -208,6 +209,14 @@ struct ContentView: View {
                             || isMeetingNotesGenerationActive
                             || recorder.sessionDirectory == nil
                             || APIProviderConfigurationStore.load().isEmpty
+                    )
+                    Button(isOpeningSavedEmailDraft ? "Opening Email Draft…" : "Open Email Draft") {
+                        Task { await openSavedEmailDraft() }
+                    }
+                    .disabled(
+                        recorder.isRecording
+                            || isOpeningSavedEmailDraft
+                            || !hasSavedMeetingNotes
                     )
                     if isProcessing { ProgressView().controlSize(.small) }
                     Text(recorder.status).foregroundStyle(.secondary)
@@ -883,8 +892,8 @@ struct ContentView: View {
                 )
                 if autoOpenEmailDraftAfterNotes {
                     do {
-                        try await prepareAutomaticEmail(notes: notes, job: job)
-                        recorder.status = "Meeting notes saved — email draft opened"
+                        let outcome = try await prepareAutomaticEmail(notes: notes, job: job)
+                        recorder.status = emailDraftStatus(for: outcome, notesWereJustSaved: true)
                     } catch {
                         recorder.status = "Meeting notes saved — email draft not opened"
                         processingFailure = MeetingProcessingFailure(
@@ -910,7 +919,10 @@ struct ContentView: View {
         throw lastError ?? MeetingNotesServiceError.invalidResponse
     }
 
-    private func prepareAutomaticEmail(notes: String, job: MeetingProcessingJob) async throws {
+    private func prepareAutomaticEmail(
+        notes: String,
+        job: MeetingProcessingJob
+    ) async throws -> MeetingEmailLaunchOutcome {
         let sender = MeetingEmailClient(rawValue: emailClientRawValue).flatMap {
             UserDefaults.standard.string(forKey: $0.senderAccountDefaultsKey)
         } ?? ""
@@ -923,13 +935,13 @@ struct ContentView: View {
             clientRawValue: emailClientRawValue,
             senderAccount: sender
         )
-        try await MeetingEmailLauncher.launch(prepared.draft, with: prepared.client)
+        return try await MeetingEmailLauncher.launch(prepared.draft, with: prepared.client)
     }
 
     private func retryAutomaticEmail(notes: String, job: MeetingProcessingJob) async {
         do {
-            try await prepareAutomaticEmail(notes: notes, job: job)
-            recorder.status = "Meeting notes saved — email draft opened"
+            let outcome = try await prepareAutomaticEmail(notes: notes, job: job)
+            recorder.status = emailDraftStatus(for: outcome, notesWereJustSaved: true)
         } catch {
             recorder.status = "Meeting notes saved — email draft not opened"
             processingFailure = MeetingProcessingFailure(
@@ -937,6 +949,70 @@ struct ContentView: View {
                 message: error.localizedDescription,
                 retryAction: .email(notes: notes, job: job)
             )
+        }
+    }
+
+    private var hasSavedMeetingNotes: Bool {
+        guard let directory = recorder.sessionDirectory else { return false }
+        return FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("meeting-notes.md").path
+        )
+    }
+
+    private func openSavedEmailDraft() async {
+        guard !isOpeningSavedEmailDraft,
+              let directory = recorder.sessionDirectory else { return }
+        let notesURL = directory.appendingPathComponent("meeting-notes.md")
+        let notes: String
+        do {
+            notes = try String(contentsOf: notesURL, encoding: .utf8)
+        } catch {
+            recorder.status = "No saved meeting notes are available for this meeting"
+            errorMessage = error.localizedDescription
+            return
+        }
+
+        let job = MeetingProcessingJob(
+            title: title,
+            attendees: attendees
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty },
+            recipients: suggestedEmailRecipients,
+            startedAt: startedAt ?? Date(),
+            endedAt: endedAt ?? Date(),
+            sessionDirectory: directory,
+            microphoneURL: nil,
+            systemAudioURL: nil,
+            typedEntries: []
+        )
+
+        isOpeningSavedEmailDraft = true
+        defer { isOpeningSavedEmailDraft = false }
+        do {
+            let outcome = try await prepareAutomaticEmail(notes: notes, job: job)
+            recorder.status = emailDraftStatus(for: outcome, notesWereJustSaved: false)
+        } catch {
+            recorder.status = "Saved notes found — email draft not opened"
+            processingFailure = MeetingProcessingFailure(
+                title: "Email Draft Could Not Be Opened",
+                message: error.localizedDescription,
+                retryAction: .email(notes: notes, job: job)
+            )
+        }
+    }
+
+    private func emailDraftStatus(
+        for outcome: MeetingEmailLaunchOutcome,
+        notesWereJustSaved: Bool
+    ) -> String {
+        switch outcome {
+        case .openedWithBody:
+            return notesWereJustSaved
+                ? "Meeting notes saved — email draft opened"
+                : "Email draft opened from saved meeting notes"
+        case .openedWithBodyCopied:
+            return "Email draft opened — notes copied; press Command-V in the message body"
         }
     }
 

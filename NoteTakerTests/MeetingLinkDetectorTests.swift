@@ -518,9 +518,26 @@ final class MeetingNotesServiceTests: XCTestCase {
             gmailComponents.queryItems?.first(where: { $0.name == "authuser" })?.value,
             draft.senderAccount
         )
+
+        let fallbackURL = try XCTUnwrap(
+            MeetingEmailDraftURLBuilder.url(
+                for: draft,
+                client: .microsoftOutlook,
+                includeBody: false
+            )
+        )
+        let fallbackComponents = try XCTUnwrap(
+            URLComponents(url: fallbackURL, resolvingAgainstBaseURL: false)
+        )
+        XCTAssertNil(fallbackComponents.queryItems?.first(where: { $0.name == "body" }))
+        XCTAssertEqual(
+            fallbackComponents.queryItems?.first(where: { $0.name == "subject" })?.value,
+            draft.subject
+        )
     }
 
     func testEmailFormatterUsesRealBulletsAndNestedIndentation() {
+        let nonbreakingSpace = "\u{00A0}"
         let formatted = MeetingNotesEmailFormatter.format(
             """
             ## EXECUTIVE SUMMARY
@@ -533,20 +550,43 @@ final class MeetingNotesServiceTests: XCTestCase {
             """
         )
 
+        let lines = formatted.components(separatedBy: .newlines)
+        XCTAssertEqual(lines[0], "EXECUTIVE SUMMARY")
+        XCTAssertEqual(lines[1], "• Primary conclusion")
         XCTAssertEqual(
-            formatted,
-            """
-            EXECUTIVE SUMMARY
-            • Primary conclusion
-                ◦ Supporting detail
-                    ◦ Deeper qualification
-
-            ACTION ITEMS
-            • Follow-up with the post-meeting team
-            """
+            lines[2],
+            String(repeating: nonbreakingSpace, count: 4) + "◦ Supporting detail"
+        )
+        XCTAssertEqual(
+            lines[3],
+            String(repeating: nonbreakingSpace, count: 8) + "◦ Deeper qualification"
         )
         XCTAssertFalse(formatted.contains("\n- "))
         XCTAssertTrue(formatted.contains("post-meeting"))
+    }
+
+    func testEmailFormatterAddsHangingIndentToWrappedBullets() {
+        let formatted = MeetingNotesEmailFormatter.format(
+            "• This primary bullet contains enough words to wrap onto another line while keeping its continuation aligned with the text after the bullet instead of returning to the left margin of the email."
+        )
+        let lines = formatted.components(separatedBy: .newlines)
+
+        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertTrue(lines[0].hasPrefix("• "))
+        XCTAssertTrue(lines[1].hasPrefix("\u{00A0}\u{00A0}"))
+        XCTAssertFalse(lines[1].hasPrefix("•"))
+        XCTAssertLessThanOrEqual(lines[0].count, 88)
+    }
+
+    func testEmailFormatterPreservesNestedIndentOnWrappedContinuation() {
+        let formatted = MeetingNotesEmailFormatter.format(
+            "    ◦ This nested bullet also contains enough words to wrap and must keep both its nesting indentation and its hanging continuation indentation in Outlook and other email clients."
+        )
+        let lines = formatted.components(separatedBy: .newlines)
+
+        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertTrue(lines[0].hasPrefix(String(repeating: "\u{00A0}", count: 4) + "◦ "))
+        XCTAssertTrue(lines[1].hasPrefix(String(repeating: "\u{00A0}", count: 6)))
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
