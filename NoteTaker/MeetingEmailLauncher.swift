@@ -145,6 +145,7 @@ enum MeetingNotesEmailFormatter {
 enum MeetingNotesRichTextFormatter {
     private static let nonbreakingSpace: Character = "\u{00A0}"
     private static let bulletIndent: CGFloat = 18
+    private static let bulletGap = "\u{2003}"
 
     static func format(_ notes: String) -> NSAttributedString {
         let plainText = MeetingNotesEmailFormatter.format(notes)
@@ -173,13 +174,9 @@ enum MeetingNotesRichTextFormatter {
             let paragraph = NSMutableParagraphStyle()
             paragraph.firstLineHeadIndent = firstLineIndent
             paragraph.headIndent = textIndent
-            paragraph.tabStops = [
-                NSTextTab(textAlignment: .left, location: textIndent)
-            ]
-            paragraph.defaultTabInterval = bulletIndent
             paragraph.paragraphSpacing = 3
             return NSAttributedString(
-                string: "\(marker)\t\(text)",
+                string: "\(marker)\(bulletGap)\(text)",
                 attributes: [
                     .font: NSFont.systemFont(ofSize: 13),
                     .paragraphStyle: paragraph
