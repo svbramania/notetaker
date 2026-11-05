@@ -1,3 +1,4 @@
+import AppKit
 import EventKit
 import XCTest
 @testable import NoteTaker
@@ -585,6 +586,51 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix(String(repeating: "\u{00A0}", count: 4) + "◦ "))
         XCTAssertTrue(lines[0].hasSuffix("clients."))
+    }
+
+    func testRichTextFormatterUsesHangingIndentsAndNaturalWrapping() throws {
+        let formatted = MeetingNotesRichTextFormatter.format(
+            """
+            DECISIONS MADE
+            • A long primary decision that should remain one paragraph and wrap at the email client's available width.
+                ◦ A nested supporting point that should remain aligned beneath its own text.
+            """
+        )
+        let primaryRange = try XCTUnwrap(formatted.string.range(of: "•\t"))
+        let primaryIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: primaryRange.lowerBound
+        )
+        let primaryStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: primaryIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(primaryStyle.firstLineHeadIndent, 0)
+        XCTAssertEqual(primaryStyle.headIndent, 18)
+
+        let nestedRange = try XCTUnwrap(formatted.string.range(of: "◦\t"))
+        let nestedIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: nestedRange.lowerBound
+        )
+        let nestedStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: nestedIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(nestedStyle.firstLineHeadIndent, 18)
+        XCTAssertEqual(nestedStyle.headIndent, 36)
+        XCTAssertFalse(formatted.string.contains("\n\u{00A0}"))
+    }
+
+    func testRichTextFormatterProducesRTFData() throws {
+        let formatted = MeetingNotesRichTextFormatter.format(
+            "DECISIONS MADE\n• Continue with the candidate."
+        )
+        let data = try formatted.data(
+            from: NSRange(location: 0, length: formatted.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        XCTAssertFalse(data.isEmpty)
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
