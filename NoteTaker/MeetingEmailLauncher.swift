@@ -70,7 +70,6 @@ struct MeetingEmailDraft: Equatable {
 }
 
 enum MeetingNotesEmailFormatter {
-    private static let maximumLineLength = 88
     private static let nonbreakingSpace = "\u{00A0}"
 
     static func format(_ notes: String) -> String {
@@ -104,13 +103,7 @@ enum MeetingNotesEmailFormatter {
                     count: level * 4
                 )
                 let marker = level == 0 ? "•" : "◦"
-                output.append(
-                    contentsOf: wrappedBulletLines(
-                        text: bullet.text,
-                        indentation: indentation,
-                        marker: marker
-                    )
-                )
+                output.append("\(indentation)\(marker) \(bullet.text)")
             } else {
                 output.append(line.trimmingCharacters(in: .whitespaces))
             }
@@ -147,34 +140,6 @@ enum MeetingNotesEmailFormatter {
         )
     }
 
-    private static func wrappedBulletLines(
-        text: String,
-        indentation: String,
-        marker: String
-    ) -> [String] {
-        let firstPrefix = "\(indentation)\(marker) "
-        let continuationPrefix = indentation
-            + String(repeating: nonbreakingSpace, count: 2)
-        let words = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-        guard !words.isEmpty else { return [firstPrefix] }
-
-        var lines: [String] = []
-        var prefix = firstPrefix
-        var current = prefix
-        for word in words {
-            let separator = current == prefix ? "" : " "
-            if current.count + separator.count + word.count > maximumLineLength,
-               current != prefix {
-                lines.append(current)
-                prefix = continuationPrefix
-                current = prefix + word
-            } else {
-                current += separator + word
-            }
-        }
-        lines.append(current)
-        return lines
-    }
 }
 
 enum MeetingEmailSenderAccount {
