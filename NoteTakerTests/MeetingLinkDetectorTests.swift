@@ -596,7 +596,7 @@ final class MeetingNotesServiceTests: XCTestCase {
                 ◦ A nested supporting point that should remain aligned beneath its own text.
             """
         )
-        let primaryRange = try XCTUnwrap(formatted.string.range(of: "•\t"))
+        let primaryRange = try XCTUnwrap(formatted.string.range(of: "•\u{2003}"))
         let primaryIndex = formatted.string.distance(
             from: formatted.string.startIndex,
             to: primaryRange.lowerBound
@@ -608,7 +608,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertEqual(primaryStyle.firstLineHeadIndent, 0)
         XCTAssertEqual(primaryStyle.headIndent, 18)
 
-        let nestedRange = try XCTUnwrap(formatted.string.range(of: "◦\t"))
+        let nestedRange = try XCTUnwrap(formatted.string.range(of: "◦\u{2003}"))
         let nestedIndex = formatted.string.distance(
             from: formatted.string.startIndex,
             to: nestedRange.lowerBound
@@ -619,6 +619,7 @@ final class MeetingNotesServiceTests: XCTestCase {
         )
         XCTAssertEqual(nestedStyle.firstLineHeadIndent, 18)
         XCTAssertEqual(nestedStyle.headIndent, 36)
+        XCTAssertFalse(formatted.string.contains("\t"))
         XCTAssertFalse(formatted.string.contains("\n\u{00A0}"))
     }
 
