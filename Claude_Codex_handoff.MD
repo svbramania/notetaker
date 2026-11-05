@@ -205,6 +205,11 @@ ATTENDEES AND MEETING DETAILS
 - Uses non-breaking spaces so Outlook and other HTML-based composers preserve primary and nested indentation.
 - Recognizes and reformats existing Unicode `•` and `◦` bullets in addition to Markdown list markers.
 - Adds regression coverage for wrapped primary bullets and wrapped nested bullets.
+- Adds a persistent Open Email Draft button beside Generate Meeting Notes whenever the selected meeting has `meeting-notes.md`.
+- Allows email composition to be retried after Cancel without regenerating notes or making another AI request.
+- Stops treating a nil `NSRunningApplication` completion object as failure when macOS supplies no launch error.
+- Detects oversized `mailto:` URLs and retries rejected full-body launches with a shorter addressed draft.
+- Copies the complete formatted notes during fallback and instructs the user to press Command-V in the draft body.
 
 ## Important source files
 
