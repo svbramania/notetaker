@@ -525,8 +525,10 @@ struct CloudMeetingNotesView: View {
             senderAccount: MeetingEmailSenderAccount.normalized(trimmedSenderAccount)
         )
         do {
-            try await MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
-            status = "\(selectedEmailClient.rawValue) opened with the addressed notes for review."
+            let outcome = try await MeetingEmailLauncher.launch(draft, with: selectedEmailClient)
+            status = outcome == .openedWithBody
+                ? "\(selectedEmailClient.rawValue) opened with the addressed notes for review."
+                : "\(selectedEmailClient.rawValue) opened. The notes were copied; press Command-V in the message body."
         } catch {
             status = error.localizedDescription
         }
