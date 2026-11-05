@@ -565,28 +565,26 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(formatted.contains("post-meeting"))
     }
 
-    func testEmailFormatterAddsHangingIndentToWrappedBullets() {
+    func testEmailFormatterDoesNotArtificiallyWrapLongPrimaryBullets() {
         let formatted = MeetingNotesEmailFormatter.format(
             "• This primary bullet contains enough words to wrap onto another line while keeping its continuation aligned with the text after the bullet instead of returning to the left margin of the email."
         )
         let lines = formatted.components(separatedBy: .newlines)
 
-        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix("• "))
-        XCTAssertTrue(lines[1].hasPrefix("\u{00A0}\u{00A0}"))
-        XCTAssertFalse(lines[1].hasPrefix("•"))
-        XCTAssertLessThanOrEqual(lines[0].count, 88)
+        XCTAssertTrue(lines[0].hasSuffix("email."))
     }
 
-    func testEmailFormatterPreservesNestedIndentOnWrappedContinuation() {
+    func testEmailFormatterDoesNotArtificiallyWrapLongNestedBullets() {
         let formatted = MeetingNotesEmailFormatter.format(
             "    ◦ This nested bullet also contains enough words to wrap and must keep both its nesting indentation and its hanging continuation indentation in Outlook and other email clients."
         )
         let lines = formatted.components(separatedBy: .newlines)
 
-        XCTAssertGreaterThan(lines.count, 1)
+        XCTAssertEqual(lines.count, 1)
         XCTAssertTrue(lines[0].hasPrefix(String(repeating: "\u{00A0}", count: 4) + "◦ "))
-        XCTAssertTrue(lines[1].hasPrefix(String(repeating: "\u{00A0}", count: 6)))
+        XCTAssertTrue(lines[0].hasSuffix("clients."))
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {
