@@ -518,6 +518,22 @@ final class MeetingNotesServiceTests: XCTestCase {
             gmailComponents.queryItems?.first(where: { $0.name == "authuser" })?.value,
             draft.senderAccount
         )
+
+        let fallbackURL = try XCTUnwrap(
+            MeetingEmailDraftURLBuilder.url(
+                for: draft,
+                client: .microsoftOutlook,
+                includeBody: false
+            )
+        )
+        let fallbackComponents = try XCTUnwrap(
+            URLComponents(url: fallbackURL, resolvingAgainstBaseURL: false)
+        )
+        XCTAssertNil(fallbackComponents.queryItems?.first(where: { $0.name == "body" }))
+        XCTAssertEqual(
+            fallbackComponents.queryItems?.first(where: { $0.name == "subject" })?.value,
+            draft.subject
+        )
     }
 
     func testEmailFormatterUsesRealBulletsAndNestedIndentation() {
