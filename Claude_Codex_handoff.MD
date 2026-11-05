@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 4, 2026 — Codex release 0.15.1
+Last updated: November 5, 2026 — Codex release 0.15.2
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.1`
+Current release: `0.15.2`
 
-Previous verified `main` commit: `22864a9a1d6da031827ed1a6fe7dd996d6478da1`; version 0.15.1 is the current local release candidate
+Previous verified `main` commit: `7d9869ea71bdf4eb1df3fd379e48c058bdf188db`; version 0.15.2 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.15.0 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.1 must pass the same workflow before merge.
+The version 0.15.1 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.2 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -197,6 +197,14 @@ ATTENDEES AND MEETING DETAILS
 - Instructs both API providers and the no-key ChatGPT handoff to produce email-ready Unicode bullets.
 - Adds cautious conversational speaker attribution: a name in a question is the addressee, and the next responsive turn may be assigned to that person only when strongly supported.
 - Uses “Unidentified participant” whenever speaker identity remains ambiguous.
+
+## Version 0.15.2 changes
+
+- Explicitly wraps long email bullets at 88 characters so continuation indentation does not depend on the email window width.
+- Adds hanging indentation to every continuation line beneath the bullet text rather than beneath the bullet marker.
+- Uses non-breaking spaces so Outlook and other HTML-based composers preserve primary and nested indentation.
+- Recognizes and reformats existing Unicode `•` and `◦` bullets in addition to Markdown list markers.
+- Adds regression coverage for wrapped primary bullets and wrapped nested bullets.
 
 ## Important source files
 
