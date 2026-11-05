@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 5, 2026 — Codex release 0.15.3
+Last updated: November 5, 2026 — Codex release 0.15.4
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.3`
+Current release: `0.15.4`
 
-Previous verified `main` commit: `cb19cb20d32dfacb68d35dd21c47e89cd5d472dc`; version 0.15.3 is the current local release candidate
+Previous verified `main` commit: `337e014b567f20db6cecb3c80fa419bddbf1f90f`; version 0.15.4 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.15.2 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.3 must pass the same workflow before merge.
+The version 0.15.3 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.4 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -220,6 +220,13 @@ ATTENDEES AND MEETING DETAILS
 - Uses `NSSharingService.composeEmail` when the selected native client is also the Mac's default email client.
 - For an explicitly selected non-default client, opens an addressed draft and copies both rich-text and plain-text representations for Command-V.
 - Adds regression coverage for artificial line breaks, primary and nested hanging indents, and RTF generation.
+
+## Version 0.15.4 changes
+
+- Replaces the literal tab after each rich-text bullet with a fixed em-space bullet gap.
+- Prevents Outlook and other email clients from expanding the first-line tab independently of the paragraph's continuation indent.
+- Keeps primary and nested continuation lines aligned beneath the first character of their corresponding bullet text.
+- Adds regression coverage proving that generated rich-text bullets contain no tab characters.
 
 ## Important source files
 
