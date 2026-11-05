@@ -214,9 +214,12 @@ ATTENDEES AND MEETING DETAILS
 ## Version 0.15.3 changes
 
 - Removes NoteTaker's fixed 88-character wrapping from email bullets.
-- Keeps each bullet as one logical paragraph so the selected email client wraps it to its actual composer width.
-- Preserves non-breaking indentation only for genuine nested bullets.
-- Adds regression coverage preventing artificial line breaks in long primary and nested bullets.
+- Builds the email body as an `NSAttributedString` with real tab stops and hanging paragraph indents.
+- Keeps each bullet as one logical paragraph so the email client wraps it to its actual composer width and continuation text aligns beneath the first character after the bullet.
+- Bolds uppercase section headings and preserves a distinct indent for genuine nested bullets.
+- Uses `NSSharingService.composeEmail` when the selected native client is also the Mac's default email client.
+- For an explicitly selected non-default client, opens an addressed draft and copies both rich-text and plain-text representations for Command-V.
+- Adds regression coverage for artificial line breaks, primary and nested hanging indents, and RTF generation.
 
 ## Important source files
 
