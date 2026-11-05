@@ -142,6 +142,69 @@ enum MeetingNotesEmailFormatter {
 
 }
 
+enum MeetingNotesRichTextFormatter {
+    private static let nonbreakingSpace: Character = "\u{00A0}"
+    private static let bulletIndent: CGFloat = 18
+
+    static func format(_ notes: String) -> NSAttributedString {
+        let plainText = MeetingNotesEmailFormatter.format(notes)
+        let result = NSMutableAttributedString(string: "")
+        let lines = plainText.components(separatedBy: .newlines)
+
+        for (index, line) in lines.enumerated() {
+            let attributedLine = formattedLine(line)
+            result.append(attributedLine)
+            if index < lines.count - 1 {
+                result.append(NSAttributedString(string: "\n"))
+            }
+        }
+        return result
+    }
+
+    private static func formattedLine(_ line: String) -> NSAttributedString {
+        let leadingSpaces = line.prefix { $0 == nonbreakingSpace }.count
+        let content = String(line.dropFirst(leadingSpaces))
+        if content.hasPrefix("• ") || content.hasPrefix("◦ ") {
+            let level = max(content.hasPrefix("◦ ") ? 1 : 0, leadingSpaces / 4)
+            let marker = level == 0 ? "•" : "◦"
+            let text = String(content.dropFirst(2))
+            let firstLineIndent = CGFloat(level) * bulletIndent
+            let textIndent = firstLineIndent + bulletIndent
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.firstLineHeadIndent = firstLineIndent
+            paragraph.headIndent = textIndent
+            paragraph.tabStops = [
+                NSTextTab(textAlignment: .left, location: textIndent)
+            ]
+            paragraph.defaultTabInterval = bulletIndent
+            paragraph.paragraphSpacing = 3
+            return NSAttributedString(
+                string: "\(marker)\t\(text)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .paragraphStyle: paragraph
+                ]
+            )
+        }
+
+        let trimmed = content.trimmingCharacters(in: .whitespaces)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.paragraphSpacing = trimmed.isEmpty ? 0 : 4
+        let isHeading = !trimmed.isEmpty
+            && trimmed == trimmed.uppercased()
+            && trimmed.rangeOfCharacter(from: .letters) != nil
+        return NSAttributedString(
+            string: trimmed,
+            attributes: [
+                .font: isHeading
+                    ? NSFont.boldSystemFont(ofSize: 13)
+                    : NSFont.systemFont(ofSize: 13),
+                .paragraphStyle: paragraph
+            ]
+        )
+    }
+}
+
 enum MeetingEmailSenderAccount {
     static func normalized(_ account: String) -> String {
         account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -315,30 +378,27 @@ enum MeetingEmailDraftURLBuilder {
 
 @MainActor
 enum MeetingEmailLauncher {
-    private static let safeDraftURLLength = 8_000
-
     static func launch(
         _ draft: MeetingEmailDraft,
         with client: MeetingEmailClient
     ) async throws -> MeetingEmailLaunchOutcome {
-        guard let fullDraftURL = MeetingEmailDraftURLBuilder.url(for: draft, client: client) else {
-            throw MeetingEmailLauncherError.couldNotCreateDraft
+        let richBody = MeetingNotesRichTextFormatter.format(draft.body)
+        if client != .gmail,
+           isDefaultMailClient(client),
+           let service = NSSharingService(named: .composeEmail),
+           service.canPerform(withItems: [richBody]) {
+            service.recipients = draft.recipients
+            service.subject = draft.subject
+            service.perform(withItems: [richBody])
+            return .openedWithBody
         }
 
-        if fullDraftURL.absoluteString.utf8.count <= safeDraftURLLength {
-            do {
-                try await open(fullDraftURL, with: client)
-                return .openedWithBody
-            } catch {
-                return try await openFallback(draft, with: client)
-            }
-        }
-
-        return try await openFallback(draft, with: client)
+        return try await openRichTextFallback(draft, richBody: richBody, with: client)
     }
 
-    private static func openFallback(
+    private static func openRichTextFallback(
         _ draft: MeetingEmailDraft,
+        richBody: NSAttributedString,
         with client: MeetingEmailClient
     ) async throws -> MeetingEmailLaunchOutcome {
         guard let shortDraftURL = MeetingEmailDraftURLBuilder.url(
@@ -348,10 +408,22 @@ enum MeetingEmailLauncher {
         ) else {
             throw MeetingEmailLauncherError.couldNotCreateDraft
         }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(draft.body, forType: .string)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if !pasteboard.writeObjects([richBody]) {
+            pasteboard.setString(draft.body, forType: .string)
+        }
         try await open(shortDraftURL, with: client)
         return .openedWithBodyCopied
+    }
+
+    private static func isDefaultMailClient(_ client: MeetingEmailClient) -> Bool {
+        guard let bundleIdentifier = client.bundleIdentifier,
+              let mailtoURL = URL(string: "mailto:"),
+              let applicationURL = NSWorkspace.shared.urlForApplication(toOpen: mailtoURL) else {
+            return false
+        }
+        return Bundle(url: applicationURL)?.bundleIdentifier == bundleIdentifier
     }
 
     private static func open(_ draftURL: URL, with client: MeetingEmailClient) async throws {
