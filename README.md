@@ -143,7 +143,7 @@ Version 0.15.0 allows multiple individual email recipients to remain selected si
 
 Version 0.15.1 converts Markdown-style list markers into real Unicode bullets with nested indentation before opening an email draft. Its AI instructions use dialogue adjacency for cautious speaker attribution: a name in a question is the addressee, and a directly following responsive answer may be attributed to that person only when strongly supported.
 
-Version 0.15.2 explicitly wraps long email bullets at 88 characters and gives each continuation line a hanging indent. Non-breaking spaces preserve primary and nested indentation when Outlook or another HTML-based composer would otherwise collapse ordinary leading spaces. The Meeting screen also provides a reusable Open Email Draft button for saved notes. Long or rejected `mailto:` bodies fall back to a shorter addressed draft with the complete notes copied for Command-V, and the launcher no longer treats a missing application return object as an error when macOS reports successful completion.
+Version 0.15.3 leaves each email bullet as one logical paragraph so the selected email client wraps it naturally to the actual composer width. Non-breaking spaces remain only on nested bullets so Outlook and other HTML-based composers preserve their indentation. The Meeting screen also provides a reusable Open Email Draft button for saved notes. Long or rejected `mailto:` bodies fall back to a shorter addressed draft with the complete notes copied for Command-V, and the launcher no longer treats a missing application return object as an error when macOS reports successful completion.
 
 ## Privacy and consent
 
