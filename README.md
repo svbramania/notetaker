@@ -143,6 +143,8 @@ Version 0.15.0 allows multiple individual email recipients to remain selected si
 
 Version 0.15.1 converts Markdown-style list markers into real Unicode bullets with nested indentation before opening an email draft. Its AI instructions use dialogue adjacency for cautious speaker attribution: a name in a question is the addressee, and a directly following responsive answer may be attributed to that person only when strongly supported.
 
+Version 0.15.2 explicitly wraps long email bullets at 88 characters and gives each continuation line a hanging indent. Non-breaking spaces preserve primary and nested indentation when Outlook or another HTML-based composer would otherwise collapse ordinary leading spaces.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
