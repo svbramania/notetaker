@@ -252,6 +252,11 @@ enum MeetingEmailLauncherError: LocalizedError {
     }
 }
 
+enum MeetingEmailLaunchOutcome: Equatable {
+    case openedWithBody
+    case openedWithBodyCopied
+}
+
 enum MeetingEmailDraftPreparationError: LocalizedError, Equatable {
     case emailClientNotSelected
     case senderAccountMissing
@@ -308,7 +313,11 @@ enum MeetingEmailDraftPreparation {
 }
 
 enum MeetingEmailDraftURLBuilder {
-    static func url(for draft: MeetingEmailDraft, client: MeetingEmailClient) -> URL? {
+    static func url(
+        for draft: MeetingEmailDraft,
+        client: MeetingEmailClient,
+        includeBody: Bool = true
+    ) -> URL? {
         switch client {
         case .appleMail, .microsoftOutlook:
             var components = URLComponents()
@@ -316,9 +325,11 @@ enum MeetingEmailDraftURLBuilder {
             components.path = draft.recipients.joined(separator: ",")
             components.queryItems = [
                 URLQueryItem(name: "subject", value: draft.subject),
-                URLQueryItem(name: "body", value: draft.body),
                 URLQueryItem(name: "from", value: draft.senderAccount)
             ]
+            if includeBody {
+                components.queryItems?.append(URLQueryItem(name: "body", value: draft.body))
+            }
             return components.url
         case .gmail:
             var components = URLComponents(string: "https://mail.google.com/mail/")
@@ -327,9 +338,11 @@ enum MeetingEmailDraftURLBuilder {
                 URLQueryItem(name: "fs", value: "1"),
                 URLQueryItem(name: "authuser", value: draft.senderAccount),
                 URLQueryItem(name: "to", value: draft.recipients.joined(separator: ",")),
-                URLQueryItem(name: "su", value: draft.subject),
-                URLQueryItem(name: "body", value: draft.body)
+                URLQueryItem(name: "su", value: draft.subject)
             ]
+            if includeBody {
+                components?.queryItems?.append(URLQueryItem(name: "body", value: draft.body))
+            }
             return components?.url
         }
     }
@@ -337,11 +350,46 @@ enum MeetingEmailDraftURLBuilder {
 
 @MainActor
 enum MeetingEmailLauncher {
-    static func launch(_ draft: MeetingEmailDraft, with client: MeetingEmailClient) async throws {
-        guard let draftURL = MeetingEmailDraftURLBuilder.url(for: draft, client: client) else {
+    private static let safeDraftURLLength = 8_000
+
+    static func launch(
+        _ draft: MeetingEmailDraft,
+        with client: MeetingEmailClient
+    ) async throws -> MeetingEmailLaunchOutcome {
+        guard let fullDraftURL = MeetingEmailDraftURLBuilder.url(for: draft, client: client) else {
             throw MeetingEmailLauncherError.couldNotCreateDraft
         }
 
+        if fullDraftURL.absoluteString.utf8.count <= safeDraftURLLength {
+            do {
+                try await open(fullDraftURL, with: client)
+                return .openedWithBody
+            } catch {
+                return try await openFallback(draft, with: client)
+            }
+        }
+
+        return try await openFallback(draft, with: client)
+    }
+
+    private static func openFallback(
+        _ draft: MeetingEmailDraft,
+        with client: MeetingEmailClient
+    ) async throws -> MeetingEmailLaunchOutcome {
+        guard let shortDraftURL = MeetingEmailDraftURLBuilder.url(
+            for: draft,
+            client: client,
+            includeBody: false
+        ) else {
+            throw MeetingEmailLauncherError.couldNotCreateDraft
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(draft.body, forType: .string)
+        try await open(shortDraftURL, with: client)
+        return .openedWithBodyCopied
+    }
+
+    private static func open(_ draftURL: URL, with client: MeetingEmailClient) async throws {
         let workspace = NSWorkspace.shared
         if let bundleIdentifier = client.bundleIdentifier {
             guard let applicationURL = workspace.urlForApplication(
@@ -354,13 +402,9 @@ enum MeetingEmailLauncher {
                     [draftURL],
                     withApplicationAt: applicationURL,
                     configuration: NSWorkspace.OpenConfiguration()
-                ) { application, error in
+                ) { _, error in
                     if let error {
                         continuation.resume(throwing: error)
-                    } else if application == nil {
-                        continuation.resume(
-                            throwing: MeetingEmailLauncherError.applicationRejectedDraft(client.rawValue)
-                        )
                     } else {
                         continuation.resume()
                     }
