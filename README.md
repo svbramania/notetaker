@@ -149,6 +149,8 @@ Version 0.15.5 prevents generated notes from commenting on transcript quality, c
 
 Version 0.15.6 keeps the Pyramid Principle executive summary concise while requiring the body of the notes to preserve substantially more discussion detail. Key discussion topics now explain context, reasoning, alternatives, concerns, constraints, examples, qualifications, and outcomes in complete sentences. Decision rationale and action-item context are retained when supported by the transcript. Claude responses may use up to 8,192 output tokens so longer meetings are not forced into an overly brief result.
 
+Version 0.15.7 renames the primary meeting panel to **Current or next meeting** and advances its title, invitees, and recipient suggestions to the next qualifying calendar meeting immediately after a calendar recording ends. The completed recording and background processing job retain their original meeting metadata. Calendar invitees are now explicitly marked as unverified metadata, and generated notes include only people whose spoken participation is supported by the transcript.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
