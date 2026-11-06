@@ -694,13 +694,15 @@ final class LocalScribe {
         Summarize the meeting transcript below. Use only information supported by the transcript.
 
         Produce clean, email-ready plain text. Remove any hashtags and fix the formatting. Do not use Markdown hash marks or Markdown tables. Use the Unicode bullet “•” for primary bullet points and “◦” for nested bullet points. Indent every nested bullet by four spaces. Never use hyphens or asterisks as bullet markers. Start with KEY FINANCIAL AMOUNTS only when a monetary amount appears in the transcript. If there is no monetary amount, omit that section entirely and begin with the executive summary. Do not promote dates, counts, percentages, quantities, or durations to the top merely because they are numbers. Then use this structure:
-        1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts
+        1. EXECUTIVE SUMMARY — apply the Pyramid Principle by leading with the most important conclusion or outcome, followed by the strongest supporting facts; keep this section concise and do not expand it into a detailed chronology
         2. DECISIONS MADE
         3. ACTION ITEMS — format each action as a numbered line with owner, due date, and status; write "Not stated" when an owner or date is absent
         4. FINANCIAL TERMS AND AMOUNTS — include only when a monetary amount was stated; preserve the exact amount, currency, quantity, unit, timing, conditions, and context
         5. KEY DISCUSSION POINTS
         6. OPEN QUESTIONS, RISKS, AND DEPENDENCIES
         7. ATTENDEES AND MEETING DETAILS
+
+        Make every section after EXECUTIVE SUMMARY detailed enough that a reader who missed the meeting can understand what was discussed. Do not reduce substantive topics to short, generic, or one-line bullets. Organize KEY DISCUSSION POINTS by topic; each substantive primary bullet should normally use two to four complete sentences to explain the context, what participants discussed, why it mattered, the reasoning or rationale, options or alternatives considered, concerns, constraints, risks, dependencies, examples, qualifications, and the resulting direction or conclusion. Use nested bullets for distinct supporting facts when they improve clarity. Do not merely repeat the executive summary; add transcript-grounded detail. For each decision, include the supporting rationale and any conditions when stated. Preserve the full scope and context of each action item.
 
         Keep names, numbers, dates, commitments, and qualifications accurate. Never comment on the transcript itself or its quality, completeness, fragmentation, clarity, missing context, or limitations. If the transcript does not support useful content for a section, omit that section entirely instead of adding a disclaimer, placeholder, “None stated,” or speculation. “Not stated” is allowed only for the owner or due date of an action item that was actually discussed. Do not invent missing information.
 
