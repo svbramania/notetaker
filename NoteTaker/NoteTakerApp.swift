@@ -37,6 +37,14 @@ private struct MeetingProcessingFailure: Identifiable {
     let retryAction: RetryAction
 }
 
+enum TranscriptionRetryPolicy {
+    static let maximumAttempts = 2
+
+    static func shouldRetry(attempt: Int, transcriptWasSaved: Bool) -> Bool {
+        !transcriptWasSaved && attempt < maximumAttempts
+    }
+}
+
 @MainActor
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
@@ -497,11 +505,13 @@ struct ContentView: View {
                             )
                         }
                         Spacer()
-                        if calendarMonitor.notificationAccessGranted {
-                            Button("Refresh") {
-                                Task { await calendarMonitor.refresh() }
-                            }
-                        } else {
+                        Button {
+                            Task { await calendarMonitor.refresh() }
+                        } label: {
+                            Label("Refresh Next Meeting", systemImage: "arrow.clockwise")
+                        }
+                        .help("Check the selected calendars now and update the next upcoming meeting")
+                        if !calendarMonitor.notificationAccessGranted {
                             Button("Enable Notifications") {
                                 Task { await calendarMonitor.requestNotificationPermission() }
                             }
@@ -765,11 +775,15 @@ struct ContentView: View {
         }
     }
 
-    private func buildTranscript(for job: MeetingProcessingJob) async {
+    private func buildTranscript(
+        for job: MeetingProcessingJob,
+        attempt: Int = 1
+    ) async {
 
         errorMessage = nil
         isProcessing = true
         defer { isProcessing = false }
+        var transcriptWasSaved = false
 
         do {
             try await scribe.requestAuthorization()
@@ -844,6 +858,7 @@ struct ContentView: View {
                 entries: allEntries
             )
             try save(report: built, entries: allEntries, in: job.sessionDirectory)
+            transcriptWasSaved = true
             if recorder.sessionDirectory == job.sessionDirectory {
                 report = built
                 entries = allEntries
@@ -856,9 +871,27 @@ struct ContentView: View {
         } catch is CancellationError {
             recorder.status = "Transcription cancelled — recordings preserved for retry"
         } catch {
+            if TranscriptionRetryPolicy.shouldRetry(
+                attempt: attempt,
+                transcriptWasSaved: transcriptWasSaved
+            ) {
+                recorder.status = "Transcription failed — retrying automatically (attempt \(attempt + 1) of \(TranscriptionRetryPolicy.maximumAttempts))…"
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else {
+                    recorder.status = "Transcription cancelled — recordings preserved for retry"
+                    return
+                }
+                await buildTranscript(for: job, attempt: attempt + 1)
+                return
+            }
+            recorder.status = transcriptWasSaved
+                ? "Meeting-note generation failed — transcript remains saved"
+                : "Transcription failed after automatic retry — recordings preserved"
             errorMessage = error.localizedDescription
             processingFailure = MeetingProcessingFailure(
-                title: "Meeting Notes Generation Failed",
+                title: transcriptWasSaved
+                    ? "Meeting Notes Generation Failed"
+                    : "Transcription Failed",
                 message: error.localizedDescription,
                 retryAction: .processing(job)
             )
