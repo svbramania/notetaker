@@ -338,6 +338,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Unicode bullet"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("treat the name as the addressee"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Unidentified participant"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Never comment on the transcript itself"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("omit that section entirely"))
     }
 
     func testCapturesMoneyWithSessionContext() {
@@ -446,6 +448,49 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertFalse(formatted.contains("KEY FINANCIAL AMOUNTS"))
         XCTAssertFalse(formatted.contains("FINANCIAL TERMS AND AMOUNTS"))
         XCTAssertTrue(formatted.hasPrefix("MEETING NOTES"))
+    }
+
+    func testFormatterRemovesTranscriptQualityCommentaryAndEmptySection() {
+        let formatted = MeetingNotesFormatter.finalize(
+            """
+            MEETING NOTES
+            EXECUTIVE SUMMARY
+            • The team agreed to schedule another interview.
+
+            OPEN QUESTIONS, RISKS, AND DEPENDENCIES:
+            • The transcript is incomplete and fragmented, leaving the substance of the discussion, any risks, and dependencies unclear.
+
+            ATTENDEES AND MEETING DETAILS
+            • Vigyan Agarwal attended.
+            """,
+            transcript: "The team agreed to schedule another interview with Vigyan Agarwal."
+        )
+
+        XCTAssertFalse(formatted.localizedCaseInsensitiveContains("transcript is incomplete"))
+        XCTAssertFalse(formatted.contains("OPEN QUESTIONS, RISKS, AND DEPENDENCIES"))
+        XCTAssertTrue(formatted.contains("The team agreed to schedule another interview."))
+        XCTAssertTrue(formatted.contains("Vigyan Agarwal attended."))
+    }
+
+    func testFormatterPreservesLegitimateTranscriptDiscussion() {
+        let formatted = MeetingNotesFormatter.finalize(
+            "KEY DISCUSSION POINTS\n• The team agreed to order the legal transcript tomorrow.",
+            transcript: "We will order the legal transcript tomorrow."
+        )
+
+        XCTAssertTrue(formatted.contains("legal transcript tomorrow"))
+    }
+
+    func testAutomaticTranscriptionRetryPolicyRetriesOnlyBeforeTranscriptIsSaved() {
+        XCTAssertTrue(
+            TranscriptionRetryPolicy.shouldRetry(attempt: 1, transcriptWasSaved: false)
+        )
+        XCTAssertFalse(
+            TranscriptionRetryPolicy.shouldRetry(attempt: 2, transcriptWasSaved: false)
+        )
+        XCTAssertFalse(
+            TranscriptionRetryPolicy.shouldRetry(attempt: 1, transcriptWasSaved: true)
+        )
     }
 
     func testNumericEvidenceIgnoresTimestampButKeepsContentNumbers() {
