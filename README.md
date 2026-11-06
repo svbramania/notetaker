@@ -147,6 +147,8 @@ Version 0.15.4 composes meeting notes as native attributed rich text. Hanging pa
 
 Version 0.15.5 prevents generated notes from commenting on transcript quality, completeness, fragmentation, missing context, or limitations. Unsupported sections are omitted instead of receiving disclaimers or placeholders. A failed complete transcription attempt retries automatically once before presenting Retry/Cancel, and the Upcoming Video Meetings panel now has an explicit **Refresh Next Meeting** button that checks the selected calendars immediately.
 
+Version 0.15.6 keeps the Pyramid Principle executive summary concise while requiring the body of the notes to preserve substantially more discussion detail. Key discussion topics now explain context, reasoning, alternatives, concerns, constraints, examples, qualifications, and outcomes in complete sentences. Decision rationale and action-item context are retained when supported by the transcript. Claude responses may use up to 8,192 output tokens so longer meetings are not forced into an overly brief result.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.

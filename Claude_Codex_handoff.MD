@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 6, 2026 — Codex release 0.15.5
+Last updated: November 6, 2026 — Codex release 0.15.6
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.5`
+Current release: `0.15.6`
 
-Previous verified `main` commit: `4838e5b4a83c11fdd2ff1cddc9c042d87b11987f`; version 0.15.5 is the current local release candidate
+Previous verified `main` commit: `3f8cda09fc407bb3e64ce4757084b49f491a7826`; version 0.15.6 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/43
 
-The version 0.15.4 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.5 must pass the same workflow before merge.
+The version 0.15.5 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.6 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -236,6 +236,14 @@ ATTENDEES AND MEETING DETAILS
 - Automatically retries the complete transcription workflow once when the first attempt fails before a transcript is saved.
 - Does not retranscribe when a later Artificial Intelligence or email step fails after the transcript was saved.
 - Renames the Upcoming Video Meetings refresh control to **Refresh Next Meeting**, keeps it visible even when notifications are disabled, and explains its purpose with help text.
+
+## Version 0.15.6 changes
+
+- Keeps the Pyramid Principle executive summary concise and unchanged in purpose.
+- Requires detailed, transcript-grounded body notes that explain context, reasoning, alternatives, concerns, constraints, examples, qualifications, and outcomes.
+- Requires decision rationale and full action-item context when the transcript supports them.
+- Applies the same detail standard to OpenAI, Claude, and the no-key ChatGPT handoff.
+- Raises Claude's output allowance from 4,096 to 8,192 tokens for longer meeting notes.
 
 ## Important source files
 

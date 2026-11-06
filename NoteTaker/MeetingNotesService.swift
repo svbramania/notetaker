@@ -475,7 +475,7 @@ struct MeetingNotesService {
 
     MEETING NOTES
     EXECUTIVE SUMMARY
-    Apply the Pyramid Principle: begin with the most important conclusion or outcome, then give the strongest supporting facts. Do not create a Key Numbers section. NoteTaker separately inserts a verified KEY FINANCIAL AMOUNTS block only when the transcript contains a monetary amount.
+    Apply the Pyramid Principle: begin with the most important conclusion or outcome, then give the strongest supporting facts. Keep this executive summary concise and do not expand it into a detailed chronology. Do not create a Key Numbers section. NoteTaker separately inserts a verified KEY FINANCIAL AMOUNTS block only when the transcript contains a monetary amount.
     DECISIONS MADE
     ACTION ITEMS
     Format each action as a numbered line containing Action, Owner, Due Date, and Status. Write “Not stated” where an owner or date is absent.
@@ -484,6 +484,8 @@ struct MeetingNotesService {
     KEY DISCUSSION POINTS
     OPEN QUESTIONS, RISKS, AND DEPENDENCIES
     ATTENDEES AND MEETING DETAILS
+
+    Make every section after EXECUTIVE SUMMARY detailed enough that a reader who missed the meeting can understand what was discussed. Do not reduce substantive topics to short, generic, or one-line bullets. Organize KEY DISCUSSION POINTS by topic; each substantive primary bullet should normally use two to four complete sentences to explain the context, what participants discussed, why it mattered, the reasoning or rationale, options or alternatives considered, concerns, constraints, risks, dependencies, examples, qualifications, and the resulting direction or conclusion. Use nested bullets for distinct supporting facts when they improve clarity. Do not merely repeat the executive summary; add transcript-grounded detail. For each decision, include the supporting rationale and any conditions when stated. Preserve the full scope and context of each action item.
 
     Preserve important facts, names, dates, commitments, disagreements, and follow-ups. Do not invent information.
 
@@ -556,7 +558,7 @@ struct MeetingNotesService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": model,
-            "max_tokens": 4_096,
+            "max_tokens": 8_192,
             "system": Self.instructions,
             "messages": [[
                 "role": "user",

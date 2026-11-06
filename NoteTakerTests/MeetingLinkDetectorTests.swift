@@ -340,6 +340,9 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Unidentified participant"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Never comment on the transcript itself"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("omit that section entirely"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Keep this executive summary concise"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("two to four complete sentences"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Do not reduce substantive topics to short, generic, or one-line bullets"))
     }
 
     func testCapturesMoneyWithSessionContext() {
@@ -413,6 +416,9 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Remove any hashtags and fix the formatting"))
         XCTAssertTrue(prompt.contains("Unicode bullet"))
         XCTAssertTrue(prompt.contains("treat the name as the addressee"))
+        XCTAssertTrue(prompt.contains("keep this section concise"))
+        XCTAssertTrue(prompt.contains("two to four complete sentences"))
+        XCTAssertTrue(prompt.contains("Do not reduce substantive topics to short, generic, or one-line bullets"))
     }
 
     func testFormatterRemovesMarkdownHeadingHashesAndBoldMarkers() {
