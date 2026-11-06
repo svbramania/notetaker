@@ -147,6 +147,17 @@ enum CalendarMeetingTimeline {
             .first
     }
 
+    static func currentOrNextMeeting(
+        after completedMeetingID: String?,
+        activeMeeting: UpcomingVideoMeeting?,
+        nextMeeting: UpcomingVideoMeeting?
+    ) -> UpcomingVideoMeeting? {
+        if let activeMeeting, activeMeeting.id != completedMeetingID {
+            return activeMeeting
+        }
+        return nextMeeting
+    }
+
     static func nextBoundary(
         in meetings: [UpcomingVideoMeeting],
         after date: Date
