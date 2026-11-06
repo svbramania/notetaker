@@ -702,7 +702,7 @@ final class LocalScribe {
         6. OPEN QUESTIONS, RISKS, AND DEPENDENCIES
         7. ATTENDEES AND MEETING DETAILS
 
-        Keep names, numbers, dates, commitments, and qualifications accurate. Clearly label anything unclear in the transcript. Do not invent missing information.
+        Keep names, numbers, dates, commitments, and qualifications accurate. Never comment on the transcript itself or its quality, completeness, fragmentation, clarity, missing context, or limitations. If the transcript does not support useful content for a section, omit that section entirely instead of adding a disclaimer, placeholder, “None stated,” or speculation. “Not stated” is allowed only for the owner or due date of an action item that was actually discussed. Do not invent missing information.
 
         Speaker attribution rules: source labels such as Mic and System identify audio channels, not people. Follow the chronological dialogue. When one utterance directly addresses a person by name and asks that person a question, treat the name as the addressee, not as the speaker of the question. If the immediately following utterance is a responsive answer, attribute that answer to the named addressee only when the adjacency and content strongly support it. Never attribute the question itself to the person being addressed. Maintain a consistent identity once supported. When attribution is uncertain, write “Unidentified participant” instead of guessing.
 

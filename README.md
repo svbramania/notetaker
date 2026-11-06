@@ -49,7 +49,7 @@ A local-first macOS meeting scribe that captures microphone audio, system/output
 - Removes substantially matching speech captured by both the microphone and system-audio tracks while preserving distinct contributions.
 - Lists saved meeting folders newest-first and automatically selects the most recent recording, including after the app is killed or reopened.
 - Lets a saved recording be selected and transcribed again without starting a new recording.
-- Shows chunk-level transcription progress, retries a failed chunk once, times out stalled Apple Speech work, and provides a cancel button without deleting recordings.
+- Shows chunk-level transcription progress, retries each failed chunk once, and automatically retries the complete transcription workflow once if no transcript was saved. Stalled Apple Speech work times out, and cancellation never deletes recordings.
 - Writes audio outside the interface thread and uses fragmented audio files so recording, stopping, and recovery are less likely to freeze the app.
 - Automatically starts AI note generation after transcription when at least one OpenAI or Claude API key is configured; otherwise it preserves the local transcript for the no-key ChatGPT handoff.
 - Queues completed meetings for transcription and AI processing so a back-to-back calendar meeting can start recording immediately while the prior meeting is processed.
@@ -144,6 +144,8 @@ Version 0.15.0 allows multiple individual email recipients to remain selected si
 Version 0.15.1 converts Markdown-style list markers into real Unicode bullets with nested indentation before opening an email draft. Its AI instructions use dialogue adjacency for cautious speaker attribution: a name in a question is the addressee, and a directly following responsive answer may be attributed to that person only when strongly supported.
 
 Version 0.15.4 composes meeting notes as native attributed rich text. Hanging paragraph indents keep every wrapped line aligned beneath the first character after its bullet, while the email client determines wrapping from the actual composer width. A fixed typographic bullet gap replaces literal tab characters so Outlook and other clients cannot expand the first-line gap differently from the continuation indent. Section headings are bold and nested bullets have their own preserved indent. When the selected native client is the Mac's default email client, NoteTaker uses the macOS rich-text email composition service. Otherwise it opens an addressed draft in the explicitly selected client and places both RTF and plain-text representations on the clipboard for Command-V. The Meeting screen also provides a reusable Open Email Draft button for saved notes.
+
+Version 0.15.5 prevents generated notes from commenting on transcript quality, completeness, fragmentation, missing context, or limitations. Unsupported sections are omitted instead of receiving disclaimers or placeholders. A failed complete transcription attempt retries automatically once before presenting Retry/Cancel, and the Upcoming Video Meetings panel now has an explicit **Refresh Next Meeting** button that checks the selected calendars immediately.
 
 ## Privacy and consent
 

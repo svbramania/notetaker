@@ -316,6 +316,35 @@ enum NumericMentionExtractor {
 }
 
 enum MeetingNotesFormatter {
+    private static let sectionHeadings: Set<String> = [
+        "MEETING NOTES",
+        "EXECUTIVE SUMMARY",
+        "DECISIONS MADE",
+        "ACTION ITEMS",
+        "FINANCIAL TERMS AND AMOUNTS",
+        "KEY DISCUSSION POINTS",
+        "OPEN QUESTIONS, RISKS, AND DEPENDENCIES",
+        "ATTENDEES AND MEETING DETAILS"
+    ]
+    private static let optionalSectionHeadings = sectionHeadings.subtracting(["MEETING NOTES"])
+    private static let transcriptQualityIndicators = [
+        "incomplete",
+        "fragmented",
+        "unclear",
+        "insufficient",
+        "limited",
+        "missing context",
+        "does not provide",
+        "doesn't provide",
+        "not enough information",
+        "unable to determine",
+        "cannot determine",
+        "could not be determined",
+        "not clear from",
+        "lacks detail",
+        "lack of detail"
+    ]
+
     static func finalize(_ generatedNotes: String, transcript: String) -> String {
         let financialEvidence = FinancialMentionExtractor.evidenceLines(in: transcript)
         var notes = financialEvidence.isEmpty
@@ -327,6 +356,8 @@ enum MeetingNotesFormatter {
             options: .regularExpression
         )
         notes = notes.replacingOccurrences(of: "**", with: "")
+        notes = removingTranscriptQualityCommentary(from: notes)
+        notes = removingEmptySections(from: notes)
         notes = notes.replacingOccurrences(
             of: #"\n[\t ]*\n(?:[\t ]*\n)+"#,
             with: "\n\n",
@@ -341,6 +372,53 @@ enum MeetingNotesFormatter {
             .map { "• \($0)" }
             .joined(separator: "\n")
         return "KEY FINANCIAL AMOUNTS\n\(keyNumbers)\n\n\(notes)"
+    }
+
+    private static func removingTranscriptQualityCommentary(from notes: String) -> String {
+        notes.components(separatedBy: .newlines)
+            .filter { line in
+                let normalized = line.lowercased()
+                guard normalized.contains("transcript") else { return true }
+                return !transcriptQualityIndicators.contains { normalized.contains($0) }
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func removingEmptySections(from notes: String) -> String {
+        let lines = notes.components(separatedBy: .newlines)
+        var output: [String] = []
+        var index = 0
+
+        while index < lines.count {
+            let heading = normalizedHeading(lines[index])
+            guard optionalSectionHeadings.contains(heading) else {
+                output.append(lines[index])
+                index += 1
+                continue
+            }
+
+            var nextSection = index + 1
+            while nextSection < lines.count {
+                let candidate = normalizedHeading(lines[nextSection])
+                if sectionHeadings.contains(candidate) { break }
+                nextSection += 1
+            }
+            let hasContent = lines[(index + 1)..<nextSection].contains {
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            if hasContent {
+                output.append(lines[index])
+                index += 1
+            } else {
+                index = nextSection
+            }
+        }
+        return output.joined(separator: "\n")
+    }
+
+    private static func normalizedHeading(_ line: String) -> String {
+        line.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ":"))
     }
 
     private static func cleanTranscriptPrefix(_ line: String) -> String {
@@ -408,6 +486,8 @@ struct MeetingNotesService {
     ATTENDEES AND MEETING DETAILS
 
     Preserve important facts, names, dates, commitments, disagreements, and follow-ups. Do not invent information.
+
+    Never comment on the transcript itself or its quality, completeness, fragmentation, clarity, missing context, or limitations. Do not write statements such as “the transcript is incomplete,” “the discussion is unclear,” or “insufficient information was provided.” If the transcript does not support useful content for a section, omit that section entirely instead of adding a disclaimer, placeholder, “None stated,” or speculation. “Not stated” is allowed only for the owner or due date of an action item that was actually discussed.
 
     Speaker attribution rules: source labels such as Mic and System identify audio channels, not people. Follow the chronological dialogue. When one utterance directly addresses a person by name and asks that person a question, treat the name as the addressee, not as the speaker of the question. If the immediately following utterance is a responsive answer, attribute that answer to the named addressee only when the adjacency and content strongly support it. Never attribute the question itself to the person being addressed. Maintain a consistent identity once supported. When attribution is uncertain, write “Unidentified participant” instead of guessing.
     """

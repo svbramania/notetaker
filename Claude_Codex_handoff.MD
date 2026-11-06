@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 5, 2026 — Codex release 0.15.4
+Last updated: November 6, 2026 — Codex release 0.15.5
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.4`
+Current release: `0.15.5`
 
-Previous verified `main` commit: `337e014b567f20db6cecb3c80fa419bddbf1f90f`; version 0.15.4 is the current local release candidate
+Previous verified `main` commit: `4838e5b4a83c11fdd2ff1cddc9c042d87b11987f`; version 0.15.5 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/33
 
-The version 0.15.3 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.4 must pass the same workflow before merge.
+The version 0.15.4 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.5 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -227,6 +227,15 @@ ATTENDEES AND MEETING DETAILS
 - Prevents Outlook and other email clients from expanding the first-line tab independently of the paragraph's continuation indent.
 - Keeps primary and nested continuation lines aligned beneath the first character of their corresponding bullet text.
 - Adds regression coverage proving that generated rich-text bullets contain no tab characters.
+
+## Version 0.15.5 changes
+
+- Instructs both API providers and the no-key ChatGPT handoff never to comment on transcript quality, completeness, fragmentation, missing context, clarity, or limitations.
+- Deterministically removes provider-generated transcript-quality disclaimer lines and then removes sections left empty by that cleanup.
+- Preserves legitimate meeting content that happens to discuss a transcript.
+- Automatically retries the complete transcription workflow once when the first attempt fails before a transcript is saved.
+- Does not retranscribe when a later Artificial Intelligence or email step fails after the transcript was saved.
+- Renames the Upcoming Video Meetings refresh control to **Refresh Next Meeting**, keeps it visible even when notifications are disabled, and explains its purpose with help text.
 
 ## Important source files
 
