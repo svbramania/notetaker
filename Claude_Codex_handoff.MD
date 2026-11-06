@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 6, 2026 — Codex release 0.15.6
+Last updated: November 6, 2026 — Codex release 0.15.7
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.6`
+Current release: `0.15.7`
 
-Previous verified `main` commit: `3f8cda09fc407bb3e64ce4757084b49f491a7826`; version 0.15.6 is the current local release candidate
+Previous verified `main` commit: `83a1688673b745975719e37cfb7fb1de9225ec2e`; version 0.15.7 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/43
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/44
 
-The version 0.15.5 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.6 must pass the same workflow before merge.
+The version 0.15.6 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.7 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -244,6 +244,14 @@ ATTENDEES AND MEETING DETAILS
 - Requires decision rationale and full action-item context when the transcript supports them.
 - Applies the same detail standard to OpenAI, Claude, and the no-key ChatGPT handoff.
 - Raises Claude's output allowance from 4,096 to 8,192 tokens for longer meeting notes.
+
+## Version 0.15.7 changes
+
+- Renames the Meeting panel to **Current or next meeting**.
+- Advances the visible meeting title and related calendar metadata to the next qualifying meeting immediately after the current calendar recording ends.
+- Preserves the completed meeting's original title and metadata in its recording folder and background processing job.
+- Marks calendar invitees in transcripts as reference metadata rather than proof of attendance or speech.
+- Restricts generated attendee lists to people whose spoken participation is supported by the transcript.
 
 ## Important source files
 

@@ -61,6 +61,7 @@ struct ContentView: View {
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var autoRecordedMeetingID: String?
+    @State private var recordedCalendarMeetingID: String?
     @State private var skippedAutoMeetingIDs: Set<String> = []
     @State private var isSynchronizingAutoRecording = false
     @State private var autoRecordingSyncPending = false
@@ -196,7 +197,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var meetingSection: some View {
-        GroupBox("Meeting") {
+        GroupBox("Current or next meeting") {
             VStack(alignment: .leading, spacing: 10) {
                 TextField("Meeting title", text: $title)
                 TextField("Attendees or email addresses (comma-separated, if known)", text: $attendees)
@@ -569,14 +570,19 @@ struct ContentView: View {
         errorMessage = nil
         do {
             if recorder.isRecording {
+                let shouldAdvanceCalendarMeeting = recordedCalendarMeetingID != nil
                 if let autoRecordedMeetingID {
                     skippedAutoMeetingIDs.insert(autoRecordedMeetingID)
                     self.autoRecordedMeetingID = nil
                 }
-                await finishRecordingAndTranscribe(status: "Recording stopped — building transcript")
+                await finishRecordingAndTranscribe(
+                    status: "Recording stopped — building transcript",
+                    advanceToNextCalendarMeeting: shouldAdvanceCalendarMeeting
+                )
             } else {
                 if clearCalendarRecipients {
                     calendarEmailRecipients = []
+                    recordedCalendarMeetingID = nil
                 }
                 report = ""
                 entries = []
@@ -593,6 +599,7 @@ struct ContentView: View {
             }
         } catch {
             errorMessage = error.localizedDescription
+            recordedCalendarMeetingID = nil
             await recorder.stop()
         }
     }
@@ -653,10 +660,12 @@ struct ContentView: View {
             )
             refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
             autoRecordedMeetingID = activeMeeting.id
+            recordedCalendarMeetingID = activeMeeting.id
             recorder.status = "Auto-recording until \(meetingTime(activeMeeting.endDate))"
         } catch {
             errorMessage = "Could not auto-record \(activeMeeting.title): \(error.localizedDescription)"
             skippedAutoMeetingIDs.insert(activeMeeting.id)
+            recordedCalendarMeetingID = nil
             await recorder.stop()
         }
     }
@@ -665,7 +674,10 @@ struct ContentView: View {
         guard autoRecordedMeetingID != nil else { return }
 
         if recorder.isRecording {
-            await finishRecordingAndTranscribe(status: status)
+            await finishRecordingAndTranscribe(
+                status: status,
+                advanceToNextCalendarMeeting: true
+            )
         }
         autoRecordedMeetingID = nil
     }
@@ -695,12 +707,16 @@ struct ContentView: View {
             }
             signOffStopTask = nil
             await finishRecordingAndTranscribe(
-                status: "Heard “\(phrase)” — recording stopped and transcript is being built"
+                status: "Heard “\(phrase)” — recording stopped and transcript is being built",
+                advanceToNextCalendarMeeting: recordedCalendarMeetingID != nil
             )
         }
     }
 
-    private func finishRecordingAndTranscribe(status: String) async {
+    private func finishRecordingAndTranscribe(
+        status: String,
+        advanceToNextCalendarMeeting: Bool = false
+    ) async {
         guard recorder.isRecording else { return }
         signOffStopTask?.cancel()
         signOffStopTask = nil
@@ -712,14 +728,38 @@ struct ContentView: View {
         if let job = makeProcessingJob(endedAt: finishedAt) {
             enqueueProcessing(job)
         }
+        let completedCalendarMeetingID = recordedCalendarMeetingID
+        recordedCalendarMeetingID = nil
+        if advanceToNextCalendarMeeting {
+            await calendarMonitor.refresh()
+            showNextCalendarMeeting(after: completedCalendarMeetingID)
+        }
     }
 
     private func prepareAndRecord(_ meeting: UpcomingVideoMeeting) {
         title = meeting.title
         attendees = meeting.attendeeNames.joined(separator: ", ")
         calendarEmailRecipients = meeting.emailRecipients
+        recordedCalendarMeetingID = meeting.id
         calendarMonitor.dismissPrompt()
         Task { await toggleRecording() }
+    }
+
+    private func showNextCalendarMeeting(after completedMeetingID: String?) {
+        let displayedMeeting = CalendarMeetingTimeline.currentOrNextMeeting(
+            after: completedMeetingID,
+            activeMeeting: calendarMonitor.activeMeeting,
+            nextMeeting: calendarMonitor.nextMeeting
+        )
+        guard let displayedMeeting else {
+            title = ""
+            attendees = ""
+            calendarEmailRecipients = []
+            return
+        }
+        title = displayedMeeting.title
+        attendees = displayedMeeting.attendeeNames.joined(separator: ", ")
+        calendarEmailRecipients = displayedMeeting.emailRecipients
     }
 
     private func addTypedEntry() {

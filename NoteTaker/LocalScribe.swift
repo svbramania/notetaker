@@ -666,7 +666,7 @@ final class LocalScribe {
         lines.append("## Meeting details")
         lines.append("- Date: \(formatter.string(from: startedAt))")
         lines.append("- End: \(formatter.string(from: endedAt))")
-        lines.append("- Attendees: \(attendees.isEmpty ? "Not provided" : attendees.joined(separator: ", "))")
+        lines.append("- Calendar invitees (not proof of attendance or speech): \(attendees.isEmpty ? "Not provided" : attendees.joined(separator: ", "))")
 
         lines.append("")
         lines.append("## Complete transcript")
@@ -703,6 +703,8 @@ final class LocalScribe {
         7. ATTENDEES AND MEETING DETAILS
 
         Make every section after EXECUTIVE SUMMARY detailed enough that a reader who missed the meeting can understand what was discussed. Do not reduce substantive topics to short, generic, or one-line bullets. Organize KEY DISCUSSION POINTS by topic; each substantive primary bullet should normally use two to four complete sentences to explain the context, what participants discussed, why it mattered, the reasoning or rationale, options or alternatives considered, concerns, constraints, risks, dependencies, examples, qualifications, and the resulting direction or conclusion. Use nested bullets for distinct supporting facts when they improve clarity. Do not merely repeat the executive summary; add transcript-grounded detail. For each decision, include the supporting rationale and any conditions when stated. Preserve the full scope and context of each action item.
+
+        In ATTENDEES AND MEETING DETAILS, include a person only when the spoken transcript supports that the person actually spoke. Calendar invitees are reference metadata, not proof that they attended or spoke. Do not list someone merely because the person appears in the invitation, is mentioned, is discussed, or is addressed by name. A named addressee may be included only when a following response is confidently attributable to that person under the speaker-attribution rules below. If no speaker names are supported, omit the attendee list rather than guessing.
 
         Keep names, numbers, dates, commitments, and qualifications accurate. Never comment on the transcript itself or its quality, completeness, fragmentation, clarity, missing context, or limitations. If the transcript does not support useful content for a section, omit that section entirely instead of adding a disclaimer, placeholder, “None stated,” or speculation. “Not stated” is allowed only for the owner or due date of an action item that was actually discussed. Do not invent missing information.
 

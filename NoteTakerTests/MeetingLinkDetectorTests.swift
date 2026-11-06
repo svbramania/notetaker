@@ -100,6 +100,33 @@ final class CalendarMeetingTimelineTests: XCTestCase {
         )
     }
 
+    func testCurrentOrNextMeetingSkipsCompletedActiveMeeting() {
+        let completed = meeting(id: "completed", startsIn: -60, endsIn: 120)
+        let future = meeting(id: "future", startsIn: 60, endsIn: 600)
+
+        XCTAssertEqual(
+            CalendarMeetingTimeline.currentOrNextMeeting(
+                after: completed.id,
+                activeMeeting: completed,
+                nextMeeting: future
+            ),
+            future
+        )
+    }
+
+    func testCurrentOrNextMeetingUsesNewBackToBackActiveMeeting() {
+        let newActive = meeting(id: "new-active", startsIn: 0, endsIn: 300)
+
+        XCTAssertEqual(
+            CalendarMeetingTimeline.currentOrNextMeeting(
+                after: "completed",
+                activeMeeting: newActive,
+                nextMeeting: nil
+            ),
+            newActive
+        )
+    }
+
     private func meeting(
         id: String,
         startsIn startOffset: TimeInterval,
@@ -343,6 +370,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Keep this executive summary concise"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("two to four complete sentences"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Do not reduce substantive topics to short, generic, or one-line bullets"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("include a person only when the spoken transcript supports that the person actually spoke"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Calendar invitees are reference metadata, not proof that they attended or spoke"))
     }
 
     func testCapturesMoneyWithSessionContext() {
@@ -419,6 +448,21 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(prompt.contains("keep this section concise"))
         XCTAssertTrue(prompt.contains("two to four complete sentences"))
         XCTAssertTrue(prompt.contains("Do not reduce substantive topics to short, generic, or one-line bullets"))
+        XCTAssertTrue(prompt.contains("include a person only when the spoken transcript supports that the person actually spoke"))
+        XCTAssertTrue(prompt.contains("omit the attendee list rather than guessing"))
+    }
+
+    func testTranscriptMarksCalendarInviteesAsUnverifiedParticipants() {
+        let transcript = LocalScribe().buildTranscript(
+            title: "Planning",
+            startedAt: Date(timeIntervalSince1970: 1_000),
+            endedAt: Date(timeIntervalSince1970: 2_000),
+            attendees: ["Invited Person"],
+            entries: [ScribeEntry(source: .microphone, text: "We should proceed.")]
+        )
+
+        XCTAssertTrue(transcript.contains("Calendar invitees (not proof of attendance or speech): Invited Person"))
+        XCTAssertFalse(transcript.contains("- Attendees: Invited Person"))
     }
 
     func testFormatterRemovesMarkdownHeadingHashesAndBoldMarkers() {
