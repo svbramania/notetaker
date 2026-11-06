@@ -458,7 +458,7 @@ final class MeetingNotesServiceTests: XCTestCase {
             startedAt: Date(timeIntervalSince1970: 1_000),
             endedAt: Date(timeIntervalSince1970: 2_000),
             attendees: ["Invited Person"],
-            entries: [ScribeEntry(source: .mic, text: "We should proceed.")]
+            entries: [ScribeEntry(source: .microphone, text: "We should proceed.")]
         )
 
         XCTAssertTrue(transcript.contains("Calendar invitees (not proof of attendance or speech): Invited Person"))
