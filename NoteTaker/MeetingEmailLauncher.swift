@@ -104,6 +104,13 @@ enum MeetingNotesEmailFormatter {
                 )
                 let marker = level == 0 ? "•" : "◦"
                 output.append("\(indentation)\(marker) \(bullet.text)")
+            } else if let numberedItem = numberedComponents(in: line) {
+                let level = max(0, numberedItem.leadingSpaces / 4)
+                let indentation = String(
+                    repeating: nonbreakingSpace,
+                    count: level * 4
+                )
+                output.append("\(indentation)\(numberedItem.marker) \(numberedItem.text)")
             } else {
                 output.append(line.trimmingCharacters(in: .whitespaces))
             }
@@ -132,6 +139,33 @@ enum MeetingNotesEmailFormatter {
         let whitespace = line[whitespaceRange]
         let leadingSpaces = whitespace.reduce(0) { count, character in
             count + (character == "\t" ? 2 : 1)
+        }
+        return (
+            leadingSpaces,
+            String(line[markerRange]),
+            String(line[textRange])
+        )
+    }
+
+    private static func numberedComponents(in line: String) -> (
+        leadingSpaces: Int,
+        marker: String,
+        text: String
+    )? {
+        let pattern = #"^(\s*)(\d+[.)])\s+(.+)$"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: line,
+                range: NSRange(line.startIndex..<line.endIndex, in: line)
+              ),
+              let whitespaceRange = Range(match.range(at: 1), in: line),
+              let markerRange = Range(match.range(at: 2), in: line),
+              let textRange = Range(match.range(at: 3), in: line) else {
+            return nil
+        }
+        let whitespace = line[whitespaceRange]
+        let leadingSpaces = whitespace.reduce(0) { count, character in
+            count + (character == "\t" ? 4 : 1)
         }
         return (
             leadingSpaces,
@@ -184,6 +218,27 @@ enum MeetingNotesRichTextFormatter {
             )
         }
 
+        if let numberedItem = numberedComponents(in: content) {
+            let font = NSFont.systemFont(ofSize: 13)
+            let level = leadingSpaces / 4
+            let firstLineIndent = CGFloat(level) * bulletIndent
+            let prefix = "\(numberedItem.marker)\(bulletGap)"
+            let prefixWidth = ceil(
+                (prefix as NSString).size(withAttributes: [.font: font]).width
+            )
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.firstLineHeadIndent = firstLineIndent
+            paragraph.headIndent = firstLineIndent + prefixWidth
+            paragraph.paragraphSpacing = 3
+            return NSAttributedString(
+                string: "\(prefix)\(numberedItem.text)",
+                attributes: [
+                    .font: font,
+                    .paragraphStyle: paragraph
+                ]
+            )
+        }
+
         let trimmed = content.trimmingCharacters(in: .whitespaces)
         let paragraph = NSMutableParagraphStyle()
         paragraph.paragraphSpacing = trimmed.isEmpty ? 0 : 4
@@ -199,6 +254,23 @@ enum MeetingNotesRichTextFormatter {
                 .paragraphStyle: paragraph
             ]
         )
+    }
+
+    private static func numberedComponents(in content: String) -> (
+        marker: String,
+        text: String
+    )? {
+        let pattern = #"^(\d+[.)])\s+(.+)$"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: content,
+                range: NSRange(content.startIndex..<content.endIndex, in: content)
+              ),
+              let markerRange = Range(match.range(at: 1), in: content),
+              let textRange = Range(match.range(at: 2), in: content) else {
+            return nil
+        }
+        return (String(content[markerRange]), String(content[textRange]))
     }
 }
 

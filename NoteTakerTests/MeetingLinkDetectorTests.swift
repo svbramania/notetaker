@@ -683,6 +683,17 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(lines[0].hasSuffix("clients."))
     }
 
+    func testEmailFormatterDoesNotArtificiallyWrapNumberedItems() {
+        let formatted = MeetingNotesEmailFormatter.format(
+            "1. Action: Send a detailed note to stakeholders. Owner: Suraj. Due Date: Not stated. Status: In progress."
+        )
+        let lines = formatted.components(separatedBy: .newlines)
+
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertTrue(lines[0].hasPrefix("1. Action:"))
+        XCTAssertTrue(lines[0].hasSuffix("In progress."))
+    }
+
     func testRichTextFormatterUsesHangingIndentsAndNaturalWrapping() throws {
         let formatted = MeetingNotesRichTextFormatter.format(
             """
@@ -727,6 +738,36 @@ final class MeetingNotesServiceTests: XCTestCase {
             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
         )
         XCTAssertFalse(data.isEmpty)
+    }
+
+    func testRichTextFormatterUsesMeasuredHangingIndentsForNumberedItems() throws {
+        let formatted = MeetingNotesRichTextFormatter.format(
+            "1. Action: Send a detailed note to stakeholders that is long enough to wrap in the email composer.\n10. Action: Follow up with the client."
+        )
+
+        let firstRange = try XCTUnwrap(formatted.string.range(of: "1.\u{2003}"))
+        let firstIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: firstRange.lowerBound
+        )
+        let firstStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: firstIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertEqual(firstStyle.firstLineHeadIndent, 0)
+        XCTAssertGreaterThan(firstStyle.headIndent, firstStyle.firstLineHeadIndent)
+
+        let tenthRange = try XCTUnwrap(formatted.string.range(of: "10.\u{2003}"))
+        let tenthIndex = formatted.string.distance(
+            from: formatted.string.startIndex,
+            to: tenthRange.lowerBound
+        )
+        let tenthStyle = try XCTUnwrap(
+            formatted.attribute(.paragraphStyle, at: tenthIndex, effectiveRange: nil)
+                as? NSParagraphStyle
+        )
+        XCTAssertGreaterThan(tenthStyle.headIndent, firstStyle.headIndent)
+        XCTAssertFalse(formatted.string.contains("\t"))
     }
 
     func testAutomaticEmailDraftPreparationRejectsMissingConfiguration() {

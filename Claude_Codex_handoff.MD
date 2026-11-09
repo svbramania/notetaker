@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 6, 2026 — Codex release 0.15.7
+Last updated: November 9, 2026 — Codex release 0.15.8
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.7`
+Current release: `0.15.8`
 
-Previous verified `main` commit: `83a1688673b745975719e37cfb7fb1de9225ec2e`; version 0.15.7 is the current local release candidate
+Previous verified `main` commit: `d8b2e1172fbabcf661f20b057cc127bf02cfd8bf`; version 0.15.8 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/44
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/45
 
-The version 0.15.6 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.7 must pass the same workflow before merge.
+The version 0.15.7 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.8 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -252,6 +252,13 @@ ATTENDEES AND MEETING DETAILS
 - Preserves the completed meeting's original title and metadata in its recording folder and background processing job.
 - Marks calendar invitees in transcripts as reference metadata rather than proof of attendance or speech.
 - Restricts generated attendee lists to people whose spoken participation is supported by the transcript.
+
+## Version 0.15.8 changes
+
+- Recognizes numbered action items as native rich-text list paragraphs.
+- Applies a measured hanging indent so wrapped lines align beneath the first character after the number marker.
+- Measures each prefix independently so `10.` and other multi-digit markers align correctly.
+- Preserves natural email-client wrapping and avoids tab characters.
 
 ## Important source files
 

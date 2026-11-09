@@ -151,6 +151,8 @@ Version 0.15.6 keeps the Pyramid Principle executive summary concise while requi
 
 Version 0.15.7 renames the primary meeting panel to **Current or next meeting** and advances its title, invitees, and recipient suggestions to the next qualifying calendar meeting immediately after a calendar recording ends. The completed recording and background processing job retain their original meeting metadata. Calendar invitees are now explicitly marked as unverified metadata, and generated notes include only people whose spoken participation is supported by the transcript.
 
+Version 0.15.8 applies native rich-text hanging indents to numbered action items as well as bullets. Wrapped continuation lines now begin directly beneath the action text after `1.`, `2.`, or multi-digit markers such as `10.`. The formatter measures each numbered prefix using the actual email font, preserves natural client-width wrapping, and avoids tab characters that Outlook can expand inconsistently.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
