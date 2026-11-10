@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 9, 2026 — Codex release 0.15.8
+Last updated: November 10, 2026 — Codex release 0.15.9
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.8`
+Current release: `0.15.9`
 
-Previous verified `main` commit: `d8b2e1172fbabcf661f20b057cc127bf02cfd8bf`; version 0.15.8 is the current local release candidate
+Previous verified `main` commit: `5d8aabd1721e11a5875b9a2c2e52dda8f828bc89`; version 0.15.9 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/45
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/46
 
-The version 0.15.7 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.8 must pass the same workflow before merge.
+The version 0.15.8 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.9 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -259,6 +259,14 @@ ATTENDEES AND MEETING DETAILS
 - Applies a measured hanging indent so wrapped lines align beneath the first character after the number marker.
 - Measures each prefix independently so `10.` and other multi-digit markers align correctly.
 - Preserves natural email-client wrapping and avoids tab characters.
+
+## Version 0.15.9 changes
+
+- Opens automatic email drafts only when the transcription contains recorded speech.
+- Keeps typed-only or silent meetings from opening Outlook automatically.
+- Makes Dismiss exclude that calendar event from auto-recording for its full lifecycle.
+- Opens Outlook fallbacks with the notes body populated instead of requiring Command-V.
+- Retains native rich-text composition when Outlook is the Mac's default email client.
 
 ## Important source files
 

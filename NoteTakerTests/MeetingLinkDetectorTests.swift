@@ -619,16 +619,57 @@ final class MeetingNotesServiceTests: XCTestCase {
             MeetingEmailDraftURLBuilder.url(
                 for: draft,
                 client: .microsoftOutlook,
-                includeBody: false
+                includeBody: true
             )
         )
         let fallbackComponents = try XCTUnwrap(
             URLComponents(url: fallbackURL, resolvingAgainstBaseURL: false)
         )
-        XCTAssertNil(fallbackComponents.queryItems?.first(where: { $0.name == "body" }))
+        XCTAssertEqual(
+            fallbackComponents.queryItems?.first(where: { $0.name == "body" })?.value,
+            draft.body
+        )
         XCTAssertEqual(
             fallbackComponents.queryItems?.first(where: { $0.name == "subject" })?.value,
             draft.subject
+        )
+    }
+
+    func testAutomaticEmailRequiresRecordedConversation() {
+        XCTAssertTrue(
+            AutomaticMeetingEmailPolicy.shouldOpenDraft(
+                automaticDraftEnabled: true,
+                hasSpokenConversation: true
+            )
+        )
+        XCTAssertFalse(
+            AutomaticMeetingEmailPolicy.shouldOpenDraft(
+                automaticDraftEnabled: true,
+                hasSpokenConversation: false
+            )
+        )
+        XCTAssertFalse(
+            AutomaticMeetingEmailPolicy.shouldOpenDraft(
+                automaticDraftEnabled: false,
+                hasSpokenConversation: true
+            )
+        )
+    }
+
+    func testDismissedMeetingRemainsExcludedFromAutoRecording() {
+        let dismissed: Set<String> = ["dismissed-meeting"]
+
+        XCTAssertFalse(
+            CalendarAutoRecordingExclusionPolicy.allowsRecording(
+                meetingID: "dismissed-meeting",
+                excludedIDs: dismissed
+            )
+        )
+        XCTAssertTrue(
+            CalendarAutoRecordingExclusionPolicy.allowsRecording(
+                meetingID: "different-meeting",
+                excludedIDs: dismissed
+            )
         )
     }
 

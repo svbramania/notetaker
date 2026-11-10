@@ -45,6 +45,24 @@ enum TranscriptionRetryPolicy {
     }
 }
 
+enum AutomaticMeetingEmailPolicy {
+    static func shouldOpenDraft(
+        automaticDraftEnabled: Bool,
+        hasSpokenConversation: Bool
+    ) -> Bool {
+        automaticDraftEnabled && hasSpokenConversation
+    }
+}
+
+enum CalendarAutoRecordingExclusionPolicy {
+    static func allowsRecording(
+        meetingID: String,
+        excludedIDs: Set<String>
+    ) -> Bool {
+        !excludedIDs.contains(meetingID)
+    }
+}
+
 @MainActor
 struct ContentView: View {
     @StateObject private var recorder = MeetingRecorder()
@@ -489,6 +507,7 @@ struct ContentView: View {
                         .disabled(recorder.isRecording)
 
                         Button("Dismiss") {
+                            skippedAutoMeetingIDs.insert(meeting.id)
                             calendarMonitor.dismissPrompt()
                         }
                     }
@@ -621,12 +640,6 @@ struct ContentView: View {
     private func applyCalendarRecordingState() async {
         let activeMeeting = calendarMonitor.activeMeeting
 
-        if let activeMeeting {
-            skippedAutoMeetingIDs.formIntersection([activeMeeting.id])
-        } else {
-            skippedAutoMeetingIDs.removeAll()
-        }
-
         guard calendarAlertsEnabled, autoRecordCalendarMeetings else {
             await stopAutomaticRecording(status: "Calendar auto-record turned off — recording saved locally")
             return
@@ -637,7 +650,10 @@ struct ContentView: View {
         }
 
         guard let activeMeeting,
-              !skippedAutoMeetingIDs.contains(activeMeeting.id),
+              CalendarAutoRecordingExclusionPolicy.allowsRecording(
+                meetingID: activeMeeting.id,
+                excludedIDs: skippedAutoMeetingIDs
+              ),
               autoRecordedMeetingID == nil,
               !recorder.isRecording else { return }
 
@@ -906,7 +922,11 @@ struct ContentView: View {
             recorder.status = transcriptionErrors.isEmpty
                 ? "Transcript saved — generating formatted meeting notes"
                 : "Partial transcript saved — generating formatted meeting notes"
-            try await generateAndSaveNotes(for: job, transcript: built)
+            try await generateAndSaveNotes(
+                for: job,
+                transcript: built,
+                hasSpokenConversation: !spoken.isEmpty
+            )
             refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
         } catch is CancellationError {
             recorder.status = "Transcription cancelled — recordings preserved for retry"
@@ -938,7 +958,11 @@ struct ContentView: View {
         }
     }
 
-    private func generateAndSaveNotes(for job: MeetingProcessingJob, transcript: String) async throws {
+    private func generateAndSaveNotes(
+        for job: MeetingProcessingJob,
+        transcript: String,
+        hasSpokenConversation: Bool
+    ) async throws {
         let configurations = APIProviderConfigurationStore.load()
         guard !configurations.isEmpty else {
             recorder.status = "Transcript saved — no API provider configured"
@@ -963,7 +987,10 @@ struct ContentView: View {
                     atomically: true,
                     encoding: .utf8
                 )
-                if autoOpenEmailDraftAfterNotes {
+                if AutomaticMeetingEmailPolicy.shouldOpenDraft(
+                    automaticDraftEnabled: autoOpenEmailDraftAfterNotes,
+                    hasSpokenConversation: hasSpokenConversation
+                ) {
                     do {
                         let outcome = try await prepareAutomaticEmail(notes: notes, job: job)
                         recorder.status = emailDraftStatus(for: outcome, notesWereJustSaved: true)
@@ -975,6 +1002,8 @@ struct ContentView: View {
                             retryAction: .email(notes: notes, job: job)
                         )
                     }
+                } else if !hasSpokenConversation {
+                    recorder.status = "Meeting notes saved — no recorded conversation, so no email draft was opened"
                 } else {
                     recorder.status = "Meeting notes generated and saved — automatic email draft is off"
                 }
@@ -1084,8 +1113,6 @@ struct ContentView: View {
             return notesWereJustSaved
                 ? "Meeting notes saved — email draft opened"
                 : "Email draft opened from saved meeting notes"
-        case .openedWithBodyCopied:
-            return "Email draft opened — notes copied; press Command-V in the message body"
         }
     }
 
