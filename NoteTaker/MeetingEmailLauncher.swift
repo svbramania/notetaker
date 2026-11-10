@@ -351,7 +351,6 @@ enum MeetingEmailLauncherError: LocalizedError {
 
 enum MeetingEmailLaunchOutcome: Equatable {
     case openedWithBody
-    case openedWithBodyCopied
 }
 
 enum MeetingEmailDraftPreparationError: LocalizedError, Equatable {
@@ -462,28 +461,22 @@ enum MeetingEmailLauncher {
             return .openedWithBody
         }
 
-        return try await openRichTextFallback(draft, richBody: richBody, with: client)
+        return try await openBodyFallback(draft, with: client)
     }
 
-    private static func openRichTextFallback(
+    private static func openBodyFallback(
         _ draft: MeetingEmailDraft,
-        richBody: NSAttributedString,
         with client: MeetingEmailClient
     ) async throws -> MeetingEmailLaunchOutcome {
-        guard let shortDraftURL = MeetingEmailDraftURLBuilder.url(
+        guard let draftURL = MeetingEmailDraftURLBuilder.url(
             for: draft,
             client: client,
-            includeBody: false
+            includeBody: true
         ) else {
             throw MeetingEmailLauncherError.couldNotCreateDraft
         }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        if !pasteboard.writeObjects([richBody]) {
-            pasteboard.setString(draft.body, forType: .string)
-        }
-        try await open(shortDraftURL, with: client)
-        return .openedWithBodyCopied
+        try await open(draftURL, with: client)
+        return .openedWithBody
     }
 
     private static func isDefaultMailClient(_ client: MeetingEmailClient) -> Bool {
