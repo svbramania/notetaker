@@ -157,6 +157,8 @@ Version 0.15.9 opens automatic email drafts only when transcription found record
 
 Version 0.15.10 prevents rich-text Outlook notes from being silently downgraded to a plain `mailto:` body. When Outlook is the Mac's default email client, NoteTaker now invokes the native rich-text composition service directly without rejecting the attributed body through a preliminary capability check. Default-client detection compares both bundle identifiers and application paths. If Outlook is not the default, NoteTaker explains how to correct the setting instead of opening a draft that loses hanging indents.
 
+Version 0.15.11 checks microphone and system-audio recordings for human voice locally with Apple's Sound Analysis framework before requesting Speech transcription. A meeting with no detected voice remains saved but is quietly skipped: no transcription, automatic retry, failure alert, Artificial Intelligence request, or email draft. If the voice-presence classifier is unavailable, NoteTaker falls back to the existing transcription path so a real meeting is never discarded solely because the precheck failed.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.

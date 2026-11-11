@@ -107,6 +107,7 @@ struct ContentView: View {
     @AppStorage("manualMeetingEmailRecipients") private var manualEmailRecipients = ""
 
     private let scribe = LocalScribe()
+    private let voiceDetector = RecordedVoiceDetector()
 
     var body: some View {
         TabView {
@@ -842,6 +843,13 @@ struct ContentView: View {
         var transcriptWasSaved = false
 
         do {
+            let recordingURLs = [job.microphoneURL, job.systemAudioURL].compactMap { $0 }
+            recorder.status = "Checking recordings for voice…"
+            if await voiceDetector.containsVoice(in: recordingURLs) == false {
+                recorder.status = "Recording saved — no voice detected, so transcription was skipped"
+                return
+            }
+
             try await scribe.requestAuthorization()
             var transcriptionErrors: [Error] = []
 
@@ -902,7 +910,11 @@ struct ContentView: View {
                 systemAudio: systemEntries
             )
             if spoken.isEmpty && job.typedEntries.isEmpty {
-                throw transcriptionErrors.first ?? LocalScribeError.noSpeechDetected
+                if let transcriptionError = transcriptionErrors.first {
+                    throw transcriptionError
+                }
+                recorder.status = "Recording saved — no voice detected, so transcription was skipped"
+                return
             }
             let allEntries = (job.typedEntries + spoken).sorted { $0.timestamp < $1.timestamp }
 
