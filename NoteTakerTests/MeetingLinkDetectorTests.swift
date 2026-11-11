@@ -1064,6 +1064,44 @@ final class MeetingEmailClientPickerTests: XCTestCase {
     }
 }
 
+final class RecordedVoiceDetectorTests: XCTestCase {
+    func testRecognizesSpeechClassification() {
+        XCTAssertTrue(
+            RecordedVoiceDetector.isVoiceClassification(
+                identifier: "speech",
+                confidence: 0.8
+            )
+        )
+    }
+
+    func testRecognizesHumanVoiceClassification() {
+        XCTAssertTrue(
+            RecordedVoiceDetector.isVoiceClassification(
+                identifier: "human_voice",
+                confidence: 0.8
+            )
+        )
+    }
+
+    func testIgnoresNonVoiceSound() {
+        XCTAssertFalse(
+            RecordedVoiceDetector.isVoiceClassification(
+                identifier: "air_conditioner",
+                confidence: 0.95
+            )
+        )
+    }
+
+    func testIgnoresLowConfidenceVoiceClassification() {
+        XCTAssertFalse(
+            RecordedVoiceDetector.isVoiceClassification(
+                identifier: "speech",
+                confidence: 0.1
+            )
+        )
+    }
+}
+
 final class LocalScribeMergeTests: XCTestCase {
     func testRemovesSameSpeechCapturedByBothTracks() {
         let timestamp = Date(timeIntervalSince1970: 1_000)
