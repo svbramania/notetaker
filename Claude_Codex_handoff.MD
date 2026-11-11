@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 11, 2026 — Codex release 0.15.13
+Last updated: November 11, 2026 — Codex release 0.15.14
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.13`
+Current release: `0.15.14`
 
-Previous verified `main` commit: `eca4211d8fe09c942914e7af2b9c4eb5f3b764e6`; version 0.15.13 is the current local release candidate
+Previous verified `main` commit: `b9485bb71c1644a1561092307f99d7c0d18dfdbc`; version 0.15.14 is the current local release candidate
 
 Pull request for the previous release: https://github.com/svbramania/notetaker/pull/47
 
-The version 0.15.12 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.13 must pass the same workflow before merge.
+The version 0.15.13 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.14 must pass the same workflow before merge.
 
 ## Product principles
 

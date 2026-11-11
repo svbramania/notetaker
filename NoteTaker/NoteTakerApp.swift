@@ -161,6 +161,13 @@ struct ContentView: View {
                 showNextCalendarMeeting(after: nil, clearWhenUnavailable: false)
             }
         }
+        .onChange(of: calendarMonitor.recordRequestedMeetingID) { _, meetingID in
+            guard let meetingID else { return }
+            calendarMonitor.consumeRecordRequest()
+            guard !recorder.isRecording,
+                  let meeting = calendarMonitor.meeting(withID: meetingID) else { return }
+            prepareAndRecord(meeting)
+        }
         .onChange(of: autoRecordCalendarMeetings) { _, _ in
             Task { await synchronizeCalendarRecording() }
         }
@@ -648,6 +655,15 @@ struct ContentView: View {
 
         guard calendarAlertsEnabled, autoRecordCalendarMeetings else {
             await stopAutomaticRecording(status: "Calendar auto-record turned off — recording saved locally")
+            return
+        }
+
+        if let activeMeeting,
+           recorder.isRecording,
+           recordedCalendarMeetingID == activeMeeting.id,
+           autoRecordedMeetingID == nil {
+            autoRecordedMeetingID = activeMeeting.id
+            recorder.status = "Recording until \(meetingTime(activeMeeting.endDate))"
             return
         }
 

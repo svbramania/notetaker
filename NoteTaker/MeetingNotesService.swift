@@ -344,6 +344,17 @@ enum MeetingNotesFormatter {
         "lacks detail",
         "lack of detail"
     ]
+    private static let speakerAttributionLimitationIndicators = [
+        "speaker identities could not",
+        "speaker identity could not",
+        "could not be confidently attributed",
+        "unable to confidently attribute",
+        "unable to attribute speakers",
+        "labeled only by audio channel",
+        "labelled only by audio channel",
+        "mic and system rather than by name",
+        "audio channels, not people"
+    ]
 
     static func finalize(_ generatedNotes: String, transcript: String) -> String {
         let financialEvidence = FinancialMentionExtractor.evidenceLines(in: transcript)
@@ -356,7 +367,7 @@ enum MeetingNotesFormatter {
             options: .regularExpression
         )
         notes = notes.replacingOccurrences(of: "**", with: "")
-        notes = removingTranscriptQualityCommentary(from: notes)
+        notes = removingUnsupportedCommentary(from: notes)
         notes = removingEmptySections(from: notes)
         notes = notes.replacingOccurrences(
             of: #"\n[\t ]*\n(?:[\t ]*\n)+"#,
@@ -374,12 +385,15 @@ enum MeetingNotesFormatter {
         return "KEY FINANCIAL AMOUNTS\n\(keyNumbers)\n\n\(notes)"
     }
 
-    private static func removingTranscriptQualityCommentary(from notes: String) -> String {
+    private static func removingUnsupportedCommentary(from notes: String) -> String {
         notes.components(separatedBy: .newlines)
             .filter { line in
                 let normalized = line.lowercased()
+                if speakerAttributionLimitationIndicators.contains(where: normalized.contains) {
+                    return false
+                }
                 guard normalized.contains("transcript") else { return true }
-                return !transcriptQualityIndicators.contains { normalized.contains($0) }
+                return !transcriptQualityIndicators.contains(where: normalized.contains)
             }
             .joined(separator: "\n")
     }
@@ -493,7 +507,7 @@ struct MeetingNotesService {
 
     Never comment on the transcript itself or its quality, completeness, fragmentation, clarity, missing context, or limitations. Do not write statements such as “the transcript is incomplete,” “the discussion is unclear,” or “insufficient information was provided.” If the transcript does not support useful content for a section, omit that section entirely instead of adding a disclaimer, placeholder, “None stated,” or speculation. “Not stated” is allowed only for the owner or due date of an action item that was actually discussed.
 
-    Speaker attribution rules: source labels such as Mic and System identify audio channels, not people. Follow the chronological dialogue. When one utterance directly addresses a person by name and asks that person a question, treat the name as the addressee, not as the speaker of the question. If the immediately following utterance is a responsive answer, attribute that answer to the named addressee only when the adjacency and content strongly support it. Never attribute the question itself to the person being addressed. Maintain a consistent identity once supported. When attribution is uncertain, write “Unidentified participant” instead of guessing.
+    Speaker attribution rules: source labels such as Mic and System identify audio channels, not people. Follow the chronological dialogue. When one utterance directly addresses a person by name and asks that person a question, treat the name as the addressee, not as the speaker of the question. If the immediately following utterance is a responsive answer, attribute that answer to the named addressee only when the adjacency and content strongly support it. Never attribute the question itself to the person being addressed. Maintain a consistent identity once supported. When attribution is uncertain, describe the supported content without naming a speaker. Never mention speaker-attribution uncertainty, audio-channel labeling, or an inability to identify speakers in the meeting notes.
     """
 
     func generate(
