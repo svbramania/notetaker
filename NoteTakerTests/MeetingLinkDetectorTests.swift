@@ -64,6 +64,10 @@ final class SignOffPhraseDetectorTests: XCTestCase {
 final class CalendarMeetingTimelineTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 10_000)
 
+    func testMeetingReminderAppearsTwoMinutesBeforeStart() {
+        XCTAssertEqual(CalendarMeetingMonitor.notificationLeadTime, 2 * 60)
+    }
+
     func testFindsMeetingInProgress() {
         let active = meeting(id: "active", startsIn: -60, endsIn: 120)
         let future = meeting(id: "future", startsIn: 300, endsIn: 600)
@@ -364,7 +368,8 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertTrue(MeetingNotesService.instructions.contains("Do not use Markdown heading symbols"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Unicode bullet"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("treat the name as the addressee"))
-        XCTAssertTrue(MeetingNotesService.instructions.contains("Unidentified participant"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("without naming a speaker"))
+        XCTAssertTrue(MeetingNotesService.instructions.contains("Never mention speaker-attribution uncertainty"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Never comment on the transcript itself"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("omit that section entirely"))
         XCTAssertTrue(MeetingNotesService.instructions.contains("Keep this executive summary concise"))
@@ -520,6 +525,25 @@ final class MeetingNotesServiceTests: XCTestCase {
         XCTAssertFalse(formatted.contains("OPEN QUESTIONS, RISKS, AND DEPENDENCIES"))
         XCTAssertTrue(formatted.contains("The team agreed to schedule another interview."))
         XCTAssertTrue(formatted.contains("Vigyan Agarwal attended."))
+    }
+
+    func testFormatterRemovesSpeakerAttributionLimitationCommentary() {
+        let formatted = MeetingNotesFormatter.finalize(
+            """
+            MEETING NOTES
+            EXECUTIVE SUMMARY
+            • The team agreed to continue the discovery work.
+
+            ATTENDEES AND MEETING DETAILS
+            • Speaker identities could not be confidently attributed from the transcript, as dialogue was labeled only by audio channel (Mic and System) rather than by name.
+            """,
+            transcript: "We agreed to continue the discovery work."
+        )
+
+        XCTAssertTrue(formatted.contains("continue the discovery work"))
+        XCTAssertFalse(formatted.localizedCaseInsensitiveContains("speaker identities"))
+        XCTAssertFalse(formatted.localizedCaseInsensitiveContains("audio channel"))
+        XCTAssertFalse(formatted.contains("ATTENDEES AND MEETING DETAILS"))
     }
 
     func testFormatterPreservesLegitimateTranscriptDiscussion() {

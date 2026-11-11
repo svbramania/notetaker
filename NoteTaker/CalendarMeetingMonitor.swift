@@ -4,6 +4,8 @@ import EventKit
 import Foundation
 import UserNotifications
 
+private let recordMeetingNotificationActionIdentifier = "RECORD_MEETING"
+
 enum MeetingProvider: String, Codable, CaseIterable {
     case microsoftTeams = "Microsoft Teams"
     case googleMeet = "Google Meet"
@@ -226,13 +228,14 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     @Published private(set) var nextMeeting: UpcomingVideoMeeting?
     @Published private(set) var activeMeeting: UpcomingVideoMeeting?
     @Published private(set) var meetingToPrompt: UpcomingVideoMeeting?
+    @Published private(set) var recordRequestedMeetingID: String?
     @Published private(set) var availableCalendars: [AvailableMeetingCalendar] = []
     @Published private(set) var includeInvitesWithoutLinks = UserDefaults.standard.bool(
         forKey: "includeCalendarInvitesWithoutMeetingLinks"
     )
     @Published private(set) var status = "Calendar alerts are not enabled"
 
-    static let notificationLeadTime: TimeInterval = 5 * 60
+    static let notificationLeadTime: TimeInterval = 2 * 60
 
     private let eventStore = EKEventStore()
     private let notificationCenter = UNUserNotificationCenter.current()
@@ -370,7 +373,12 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         }
 
         if notificationAccessGranted {
-            await scheduleNotifications(for: meetings, now: now)
+            do {
+                try await scheduleNotifications(for: meetings, now: now)
+            } catch {
+                status = "Could not schedule the meeting reminder: \(error.localizedDescription)"
+                return
+            }
             status = includedCalendarCount == 0
                 ? "Choose one or more calendars to monitor"
                 : activeMeeting != nil
@@ -390,6 +398,16 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
             dismissedPromptIDs.insert(meetingToPrompt.id)
         }
         meetingToPrompt = nil
+    }
+
+    func meeting(withID identifier: String) -> UpcomingVideoMeeting? {
+        [activeMeeting, nextMeeting, meetingToPrompt]
+            .compactMap { $0 }
+            .first { $0.id == identifier }
+    }
+
+    func consumeRecordRequest() {
+        recordRequestedMeetingID = nil
     }
 
     func isCalendarIncluded(_ identifier: String) -> Bool {
@@ -556,6 +574,11 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
     }
 
     private func registerNotificationActions() {
+        let recordAction = UNNotificationAction(
+            identifier: recordMeetingNotificationActionIdentifier,
+            title: "Record",
+            options: [.foreground]
+        )
         let openAction = UNNotificationAction(
             identifier: "OPEN_NOTETAKER",
             title: "Open NoteTaker",
@@ -563,14 +586,14 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         )
         let category = UNNotificationCategory(
             identifier: "UPCOMING_VIDEO_MEETING",
-            actions: [openAction],
+            actions: [recordAction, openAction],
             intentIdentifiers: [],
             options: []
         )
         notificationCenter.setNotificationCategories([category])
     }
 
-    private func scheduleNotifications(for meetings: [UpcomingVideoMeeting], now: Date) async {
+    private func scheduleNotifications(for meetings: [UpcomingVideoMeeting], now: Date) async throws {
         let notificationPrefix = "video-meeting-"
         let validIdentifiers = Set(meetings.map { notificationPrefix + $0.id })
         let pending = await pendingNotificationRequests()
@@ -585,7 +608,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
 
             let content = UNMutableNotificationContent()
             content.title = "Meeting starts soon—record?"
-            content.body = "\(meeting.title) starts in 5 minutes on \(meeting.provider.rawValue)."
+            content.body = "\(meeting.title) starts in 2 minutes on \(meeting.provider.rawValue)."
             content.sound = .default
             content.categoryIdentifier = "UPCOMING_VIDEO_MEETING"
             content.userInfo = ["eventIdentifier": meeting.id]
@@ -600,7 +623,7 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
                 content: content,
                 trigger: trigger
             )
-            await addNotificationRequest(request)
+            try await addNotificationRequest(request)
         }
     }
 
@@ -612,10 +635,14 @@ final class CalendarMeetingMonitor: NSObject, ObservableObject {
         }
     }
 
-    private func addNotificationRequest(_ request: UNNotificationRequest) async {
-        await withCheckedContinuation { continuation in
-            notificationCenter.add(request) { _ in
-                continuation.resume()
+    private func addNotificationRequest(_ request: UNNotificationRequest) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            notificationCenter.add(request) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
             }
         }
     }
@@ -635,9 +662,15 @@ extension CalendarMeetingMonitor: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let actionIdentifier = response.actionIdentifier
+        let meetingID = response.notification.request.content.userInfo["eventIdentifier"] as? String
         completionHandler()
         Task { @MainActor [weak self] in
             await self?.refresh()
+            if actionIdentifier == recordMeetingNotificationActionIdentifier,
+               let meetingID {
+                self?.recordRequestedMeetingID = meetingID
+            }
             NSApp.activate(ignoringOtherApps: true)
         }
     }
