@@ -161,6 +161,8 @@ Version 0.15.11 checks microphone and system-audio recordings for human voice lo
 
 Version 0.15.12 consolidates the former Upcoming Video Meetings panel into **Current or next meeting**. The title, attendees, provider, and start time update from the current or next qualifying calendar event, including after the application becomes active. **Refresh Next Meeting** now sits immediately after **Record Meeting**, and recording from the primary button preserves that calendar meeting's invitees and email-recipient suggestions. The separate upcoming-meetings panel has been removed.
 
+Version 0.15.13 advances the **Current or next meeting** fields immediately when a calendar meeting ends, before audio finalization, transcription, or Artificial Intelligence processing. NoteTaker first snapshots the completed meeting's original title, attendees, recipients, timestamps, typed notes, and recording URLs so the background transcript and notes cannot accidentally inherit the next meeting's metadata.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.

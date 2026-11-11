@@ -742,15 +742,23 @@ struct ContentView: View {
         guard recorder.isRecording else { return }
         signOffStopTask?.cancel()
         signOffStopTask = nil
-        await recorder.stop()
         let finishedAt = Date()
+        let completedCalendarMeetingID = recordedCalendarMeetingID
+        let completedMeetingJob = makeProcessingJob(endedAt: finishedAt)
+
+        // Update the visible meeting before audio finalization or transcription.
+        // The completed meeting job above retains the original title and metadata.
+        if advanceToNextCalendarMeeting {
+            showNextCalendarMeeting(after: completedCalendarMeetingID)
+        }
+
+        await recorder.stop()
         endedAt = finishedAt
         recorder.status = status
         refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
-        if let job = makeProcessingJob(endedAt: finishedAt) {
+        if let job = completedMeetingJob {
             enqueueProcessing(job)
         }
-        let completedCalendarMeetingID = recordedCalendarMeetingID
         recordedCalendarMeetingID = nil
         if advanceToNextCalendarMeeting {
             await calendarMonitor.refresh()
