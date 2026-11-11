@@ -1,6 +1,6 @@
 # NoteTaker — Claude Development Handoff
 
-Last updated: November 10, 2026 — Codex release 0.15.9
+Last updated: November 11, 2026 — Codex release 0.15.10
 
 ## Purpose
 
@@ -8,13 +8,13 @@ NoteTaker is a local-first macOS application that records microphone and system 
 
 Repository: https://github.com/svbramania/notetaker
 
-Current release: `0.15.9`
+Current release: `0.15.10`
 
-Previous verified `main` commit: `5d8aabd1721e11a5875b9a2c2e52dda8f828bc89`; version 0.15.9 is the current local release candidate
+Previous verified `main` commit: `d059386a88105f4612f86b09dc943da4a8a5759a`; version 0.15.10 is the current local release candidate
 
-Pull request for the previous release: https://github.com/svbramania/notetaker/pull/46
+Pull request for the previous release: https://github.com/svbramania/notetaker/pull/47
 
-The version 0.15.8 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.9 must pass the same workflow before merge.
+The version 0.15.9 macOS GitHub Actions build and test suite passed before that release was squash-merged. Version 0.15.10 must pass the same workflow before merge.
 
 ## Product principles
 
@@ -267,6 +267,14 @@ ATTENDEES AND MEETING DETAILS
 - Makes Dismiss exclude that calendar event from auto-recording for its full lifecycle.
 - Opens Outlook fallbacks with the notes body populated instead of requiring Command-V.
 - Retains native rich-text composition when Outlook is the Mac's default email client.
+
+## Version 0.15.10 changes
+
+- Prevents Outlook drafts from silently falling back to a plain-text body that loses hanging indents.
+- Invokes the native rich-text composition service directly for the default Outlook client without a preliminary capability rejection.
+- Strengthens default-client detection using case-insensitive bundle identifiers and application-path comparison.
+- Shows a corrective default-client message instead of opening a malformed non-default Outlook draft.
+- Adds regression coverage for native rich-text versus plain-text composition routing.
 
 ## Important source files
 
