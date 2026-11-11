@@ -336,6 +336,7 @@ enum MeetingEmailLauncherError: LocalizedError {
     case couldNotCreateDraft
     case applicationUnavailable(String)
     case applicationRejectedDraft(String)
+    case richTextRequiresDefaultClient(String)
 
     var errorDescription: String? {
         switch self {
@@ -345,6 +346,28 @@ enum MeetingEmailLauncherError: LocalizedError {
             return "Install or enable \(application), then try again."
         case .applicationRejectedDraft(let application):
             return "macOS could not open the draft in \(application). Confirm the app is installed and selected as an email client, then retry."
+        case .richTextRequiresDefaultClient(let application):
+            return "Set \(application) as the Mac's default email reader, then retry. NoteTaker will open the draft with the rich-text notes already inserted."
+        }
+    }
+}
+
+enum MeetingEmailCompositionMode: Equatable {
+    case nativeRichText
+    case prefilledPlainText
+    case requiresDefaultNativeClient
+
+    static func resolve(
+        client: MeetingEmailClient,
+        isDefaultNativeClient: Bool
+    ) -> MeetingEmailCompositionMode {
+        switch client {
+        case .gmail:
+            return .prefilledPlainText
+        case .appleMail, .microsoftOutlook:
+            return isDefaultNativeClient
+                ? .nativeRichText
+                : .requiresDefaultNativeClient
         }
     }
 }
@@ -450,18 +473,24 @@ enum MeetingEmailLauncher {
         _ draft: MeetingEmailDraft,
         with client: MeetingEmailClient
     ) async throws -> MeetingEmailLaunchOutcome {
-        let richBody = MeetingNotesRichTextFormatter.format(draft.body)
-        if client != .gmail,
-           isDefaultMailClient(client),
-           let service = NSSharingService(named: .composeEmail),
-           service.canPerform(withItems: [richBody]) {
+        switch MeetingEmailCompositionMode.resolve(
+            client: client,
+            isDefaultNativeClient: isDefaultMailClient(client)
+        ) {
+        case .nativeRichText:
+            guard let service = NSSharingService(named: .composeEmail) else {
+                throw MeetingEmailLauncherError.couldNotCreateDraft
+            }
+            let richBody = MeetingNotesRichTextFormatter.format(draft.body)
             service.recipients = draft.recipients
             service.subject = draft.subject
             service.perform(withItems: [richBody])
             return .openedWithBody
+        case .prefilledPlainText:
+            return try await openBodyFallback(draft, with: client)
+        case .requiresDefaultNativeClient:
+            throw MeetingEmailLauncherError.richTextRequiresDefaultClient(client.rawValue)
         }
-
-        return try await openBodyFallback(draft, with: client)
     }
 
     private static func openBodyFallback(
@@ -485,7 +514,16 @@ enum MeetingEmailLauncher {
               let applicationURL = NSWorkspace.shared.urlForApplication(toOpen: mailtoURL) else {
             return false
         }
-        return Bundle(url: applicationURL)?.bundleIdentifier == bundleIdentifier
+        if let defaultBundleIdentifier = Bundle(url: applicationURL)?.bundleIdentifier,
+           defaultBundleIdentifier.localizedCaseInsensitiveCompare(bundleIdentifier) == .orderedSame {
+            return true
+        }
+        guard let selectedApplicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        ) else {
+            return false
+        }
+        return applicationURL.standardizedFileURL == selectedApplicationURL.standardizedFileURL
     }
 
     private static func open(_ draftURL: URL, with client: MeetingEmailClient) async throws {

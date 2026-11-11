@@ -155,6 +155,8 @@ Version 0.15.8 applies native rich-text hanging indents to numbered action items
 
 Version 0.15.9 opens automatic email drafts only when transcription found recorded speech. Dismissing a calendar meeting now excludes that event from auto-recording instead of merely hiding its reminder. Outlook drafts are opened with the notes body already populated: native rich text is used when Outlook is the Mac's default email client, while the non-default-client fallback includes the formatted plain-text body directly rather than requiring Command-V.
 
+Version 0.15.10 prevents rich-text Outlook notes from being silently downgraded to a plain `mailto:` body. When Outlook is the Mac's default email client, NoteTaker now invokes the native rich-text composition service directly without rejecting the attributed body through a preliminary capability check. Default-client detection compares both bundle identifiers and application paths. If Outlook is not the default, NoteTaker explains how to correct the setting instead of opening a draft that loses hanging indents.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.

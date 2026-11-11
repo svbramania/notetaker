@@ -656,6 +656,40 @@ final class MeetingNotesServiceTests: XCTestCase {
         )
     }
 
+    func testNativeEmailClientsRequireDefaultStatusForRichText() {
+        XCTAssertEqual(
+            MeetingEmailCompositionMode.resolve(
+                client: .microsoftOutlook,
+                isDefaultNativeClient: true
+            ),
+            .nativeRichText
+        )
+        XCTAssertEqual(
+            MeetingEmailCompositionMode.resolve(
+                client: .microsoftOutlook,
+                isDefaultNativeClient: false
+            ),
+            .requiresDefaultNativeClient
+        )
+        XCTAssertEqual(
+            MeetingEmailCompositionMode.resolve(
+                client: .appleMail,
+                isDefaultNativeClient: false
+            ),
+            .requiresDefaultNativeClient
+        )
+    }
+
+    func testGmailUsesPrefilledPlainTextComposition() {
+        XCTAssertEqual(
+            MeetingEmailCompositionMode.resolve(
+                client: .gmail,
+                isDefaultNativeClient: false
+            ),
+            .prefilledPlainText
+        )
+    }
+
     func testDismissedMeetingRemainsExcludedFromAutoRecording() {
         let dismissed: Set<String> = ["dismissed-meeting"]
 
