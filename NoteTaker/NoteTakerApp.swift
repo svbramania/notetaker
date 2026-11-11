@@ -115,7 +115,6 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("NoteTaker Scribe").font(.largeTitle.bold())
                     meetingSection
-                    calendarMeetingSection
                 }
                 .padding(20)
             }
@@ -150,7 +149,17 @@ struct ContentView: View {
             refreshMeetingEmailClients()
         }
         .onChange(of: calendarMonitor.activeMeeting, initial: true) { _, _ in
-            Task { await synchronizeCalendarRecording() }
+            Task {
+                await synchronizeCalendarRecording()
+                if !recorder.isRecording {
+                    showNextCalendarMeeting(after: nil, clearWhenUnavailable: false)
+                }
+            }
+        }
+        .onChange(of: calendarMonitor.nextMeeting?.id, initial: true) { _, _ in
+            if !recorder.isRecording {
+                showNextCalendarMeeting(after: nil, clearWhenUnavailable: false)
+            }
         }
         .onChange(of: autoRecordCalendarMeetings) { _, _ in
             Task { await synchronizeCalendarRecording() }
@@ -191,6 +200,9 @@ struct ContentView: View {
                 Task {
                     await calendarMonitor.refresh()
                     await synchronizeCalendarRecording()
+                    if !recorder.isRecording {
+                        showNextCalendarMeeting(after: nil, clearWhenUnavailable: false)
+                    }
                 }
             }
         }
@@ -223,11 +235,18 @@ struct ContentView: View {
 
                 HStack(spacing: 12) {
                     Button {
-                        Task { await toggleRecording(clearCalendarRecipients: true) }
+                        recordFromPrimaryButton()
                     } label: {
                         Label(recorder.isRecording ? "Stop Meeting" : "Record Meeting", systemImage: recorder.isRecording ? "stop.circle.fill" : "record.circle")
                     }
                     .buttonStyle(.borderedProminent)
+                    Button {
+                        Task { await refreshNextCalendarMeeting() }
+                    } label: {
+                        Label("Refresh Next Meeting", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(recorder.isRecording || !calendarAlertsEnabled)
+                    .help("Check the selected calendars now and display the current or next meeting")
                     Button(isMeetingNotesGenerationActive ? "Generating…" : "Generate Meeting Notes") {
                         Task { await startTranscriptBuild() }
                     }
@@ -247,9 +266,38 @@ struct ContentView: View {
                             || !hasSavedMeetingNotes
                     )
                     if isProcessing { ProgressView().controlSize(.small) }
-                    Text(recorder.status).foregroundStyle(.secondary)
                     Spacer()
                 }
+
+                if calendarAlertsEnabled, let meeting = displayedCalendarMeeting {
+                    HStack {
+                        Label(
+                            "\(meeting.provider.rawValue) • \(meetingTime(meeting.startDate))",
+                            systemImage: meeting.provider.systemImage
+                        )
+                        if calendarMonitor.meetingToPrompt?.id == meeting.id,
+                           !recorder.isRecording {
+                            Text("Meeting starts soon—record?")
+                            Button("Dismiss Meeting") {
+                                skippedAutoMeetingIDs.insert(meeting.id)
+                                calendarMonitor.dismissPrompt()
+                            }
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else if !calendarAlertsEnabled {
+                    Label("Calendar alerts are turned off in Settings", systemImage: "calendar.badge.minus")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(calendarMonitor.status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text(recorder.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
                     Picker("Saved meeting", selection: $selectedSavedMeetingID) {
@@ -370,6 +418,11 @@ struct ContentView: View {
                     } else {
                         Button("Choose Calendars") { showsCalendarSelection = true }
                     }
+                    if !calendarMonitor.notificationAccessGranted {
+                        Button("Enable Notifications") {
+                            Task { await calendarMonitor.requestNotificationPermission() }
+                        }
+                    }
                     Button("Add Calendar Account…") {
                         CalendarAccountSettings.open()
                     }
@@ -479,79 +532,6 @@ struct ContentView: View {
         .foregroundStyle(granted ? Color.green : Color.gray)
     }
 
-    @ViewBuilder
-    private var calendarMeetingSection: some View {
-        GroupBox("Upcoming video meetings") {
-            VStack(alignment: .leading, spacing: 10) {
-                if !calendarAlertsEnabled {
-                    Label("Calendar alerts are turned off in Settings", systemImage: "calendar.badge.minus")
-                        .foregroundStyle(.secondary)
-                } else if let meeting = calendarMonitor.meetingToPrompt {
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: meeting.provider.systemImage)
-                            .font(.title2)
-                            .foregroundStyle(.blue)
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Meeting starts soon—record?")
-                                .font(.headline)
-                            Text("\(meeting.title) • \(meeting.provider.rawValue) • \(meetingTime(meeting.startDate))")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Button("Record Meeting") {
-                            prepareAndRecord(meeting)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(recorder.isRecording)
-
-                        Button("Dismiss") {
-                            skippedAutoMeetingIDs.insert(meeting.id)
-                            calendarMonitor.dismissPrompt()
-                        }
-                    }
-                } else if calendarMonitor.calendarAccessGranted {
-                    HStack {
-                        Image(systemName: "calendar.badge.clock")
-                            .foregroundStyle(.secondary)
-                        if let meeting = calendarMonitor.nextMeeting {
-                            Text("Next: \(meeting.title) at \(meetingTime(meeting.startDate)) on \(meeting.provider.rawValue)")
-                        } else {
-                            Text(
-                                calendarMonitor.includeInvitesWithoutLinks
-                                    ? "Watching for video links and attendee-based meeting invitations"
-                                    : "Watching Calendar for Teams, Zoom, and Google Meet links"
-                            )
-                        }
-                        Spacer()
-                        Button {
-                            Task { await calendarMonitor.refresh() }
-                        } label: {
-                            Label("Refresh Next Meeting", systemImage: "arrow.clockwise")
-                        }
-                        .help("Check the selected calendars now and update the next upcoming meeting")
-                        if !calendarMonitor.notificationAccessGranted {
-                            Button("Enable Notifications") {
-                                Task { await calendarMonitor.requestNotificationPermission() }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
-                } else {
-                    Text("Allow Calendar access from Settings to detect upcoming video meetings.")
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(calendarMonitor.status)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(6)
-        }
-    }
-
     private var suggestedEmailRecipients: [MeetingEmailRecipient] {
         EmailAddressExtractor.merged(
             calendarEmailRecipients
@@ -584,6 +564,31 @@ struct ContentView: View {
 
     private var isMeetingNotesGenerationActive: Bool {
         isProcessing || transcriptionTask != nil || !processingQueue.isEmpty
+    }
+
+    private var displayedCalendarMeeting: UpcomingVideoMeeting? {
+        CalendarMeetingTimeline.currentOrNextMeeting(
+            after: nil,
+            activeMeeting: calendarMonitor.activeMeeting,
+            nextMeeting: calendarMonitor.nextMeeting
+        )
+    }
+
+    private func recordFromPrimaryButton() {
+        if recorder.isRecording {
+            Task { await toggleRecording() }
+        } else if let meeting = displayedCalendarMeeting,
+                  title == meeting.title {
+            prepareAndRecord(meeting)
+        } else {
+            Task { await toggleRecording(clearCalendarRecipients: true) }
+        }
+    }
+
+    private func refreshNextCalendarMeeting() async {
+        await calendarMonitor.refresh()
+        showNextCalendarMeeting(after: nil, clearWhenUnavailable: false)
+        await synchronizeCalendarRecording()
     }
 
     private func toggleRecording(clearCalendarRecipients: Bool = false) async {
@@ -762,13 +767,17 @@ struct ContentView: View {
         Task { await toggleRecording() }
     }
 
-    private func showNextCalendarMeeting(after completedMeetingID: String?) {
+    private func showNextCalendarMeeting(
+        after completedMeetingID: String?,
+        clearWhenUnavailable: Bool = true
+    ) {
         let displayedMeeting = CalendarMeetingTimeline.currentOrNextMeeting(
             after: completedMeetingID,
             activeMeeting: calendarMonitor.activeMeeting,
             nextMeeting: calendarMonitor.nextMeeting
         )
         guard let displayedMeeting else {
+            guard clearWhenUnavailable else { return }
             title = ""
             attendees = ""
             calendarEmailRecipients = []

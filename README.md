@@ -159,6 +159,8 @@ Version 0.15.10 prevents rich-text Outlook notes from being silently downgraded 
 
 Version 0.15.11 checks microphone and system-audio recordings for human voice locally with Apple's Sound Analysis framework before requesting Speech transcription. A meeting with no detected voice remains saved but is quietly skipped: no transcription, automatic retry, failure alert, Artificial Intelligence request, or email draft. If the voice-presence classifier is unavailable, NoteTaker falls back to the existing transcription path so a real meeting is never discarded solely because the precheck failed.
 
+Version 0.15.12 consolidates the former Upcoming Video Meetings panel into **Current or next meeting**. The title, attendees, provider, and start time update from the current or next qualifying calendar event, including after the application becomes active. **Refresh Next Meeting** now sits immediately after **Record Meeting**, and recording from the primary button preserves that calendar meeting's invitees and email-recipient suggestions. The separate upcoming-meetings panel has been removed.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
