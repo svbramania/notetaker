@@ -165,6 +165,8 @@ Version 0.15.13 advances the **Current or next meeting** fields immediately when
 
 Version 0.15.14 schedules meeting reminders two minutes before the calendar start time and adds a direct **Record** notification action alongside **Open NoteTaker**. Recording from the notification uses the event's title and invite metadata and becomes calendar-linked at meeting start so automatic end-time handling remains intact. Notification scheduling failures are caught and reported through NoteTaker status. Meeting-note prompts now forbid speaker-attribution limitation commentary, and the final formatter removes such commentary if a provider returns it anyway.
 
+Version 0.15.15 adds **Stop Generating** immediately before the disabled **Generating…** button. Stopping cancels the active transcription or Artificial Intelligence request, clears queued generation jobs, suppresses Retry/Cancel failure UI for the intentional cancellation, and checks cancellation again before saving generated notes and before opening an email draft. Recordings and any transcript already saved remain available for retry.
+
 ## Privacy and consent
 
 Meeting audio remains local to your Mac. The transcript stays local until you paste and submit the prepared prompt to ChatGPT. Recording laws and company policies vary by jurisdiction and organization, so make sure participants are appropriately informed and that you have permission to record where required.
