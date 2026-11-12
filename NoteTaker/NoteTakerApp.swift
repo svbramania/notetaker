@@ -89,6 +89,7 @@ struct ContentView: View {
     @State private var transcriptionTask: Task<Void, Never>?
     @State private var transcriptionTaskID: UUID?
     @State private var processingQueue: [MeetingProcessingJob] = []
+    @State private var isStoppingGeneration = false
     @State private var processingFailure: MeetingProcessingFailure?
     @State private var savedMeetings: [SavedMeetingSession] = []
     @State private var selectedSavedMeetingID = ""
@@ -254,6 +255,12 @@ struct ContentView: View {
                     }
                     .disabled(recorder.isRecording || !calendarAlertsEnabled)
                     .help("Check the selected calendars now and display the current or next meeting")
+                    if isMeetingNotesGenerationActive {
+                        Button(isStoppingGeneration ? "Stopping…" : "Stop Generating", role: .cancel) {
+                            stopGeneratingMeetingNotes()
+                        }
+                        .disabled(isStoppingGeneration)
+                    }
                     Button(isMeetingNotesGenerationActive ? "Generating…" : "Generate Meeting Notes") {
                         Task { await startTranscriptBuild() }
                     }
@@ -316,9 +323,6 @@ struct ContentView: View {
                     Button("Refresh") { refreshSavedMeetings(selectMostRecent: selectedSavedMeetingID.isEmpty) }
                     Button("Transcribe Meeting") { Task { await startTranscriptBuild() } }
                         .disabled(recorder.isRecording || isProcessing || recorder.sessionDirectory == nil)
-                    if isProcessing {
-                        Button("Cancel") { transcriptionTask?.cancel() }
-                    }
                 }
 
                 HStack {
@@ -820,8 +824,18 @@ struct ContentView: View {
     }
 
     private func startTranscriptBuild() async {
+        isStoppingGeneration = false
         guard let job = makeProcessingJob(endedAt: endedAt ?? Date()) else { return }
         enqueueProcessing(job)
+    }
+
+    private func stopGeneratingMeetingNotes() {
+        guard isMeetingNotesGenerationActive else { return }
+        isStoppingGeneration = true
+        processingQueue.removeAll()
+        processingFailure = nil
+        transcriptionTask?.cancel()
+        recorder.status = "Stopping generation — no email draft will be opened"
     }
 
     private func makeProcessingJob(endedAt: Date) -> MeetingProcessingJob? {
@@ -861,6 +875,7 @@ struct ContentView: View {
             if transcriptionTaskID == taskID {
                 transcriptionTask = nil
                 transcriptionTaskID = nil
+                isStoppingGeneration = false
             }
         }
     }
@@ -876,12 +891,14 @@ struct ContentView: View {
         var transcriptWasSaved = false
 
         do {
+            try Task.checkCancellation()
             let recordingURLs = [job.microphoneURL, job.systemAudioURL].compactMap { $0 }
             recorder.status = "Checking recordings for voice…"
             if await voiceDetector.containsVoice(in: recordingURLs) == false {
                 recorder.status = "Recording saved — no voice detected, so transcription was skipped"
                 return
             }
+            try Task.checkCancellation()
 
             try await scribe.requestAuthorization()
             var transcriptionErrors: [Error] = []
@@ -911,6 +928,7 @@ struct ContentView: View {
             } else {
                 micEntries = []
             }
+            try Task.checkCancellation()
 
             let systemEntries: [ScribeEntry]
             if let system = job.systemAudioURL {
@@ -937,6 +955,7 @@ struct ContentView: View {
             } else {
                 systemEntries = []
             }
+            try Task.checkCancellation()
 
             let spoken = scribe.mergeSpokenEntries(
                 microphone: micEntries,
@@ -958,6 +977,7 @@ struct ContentView: View {
                 attendees: job.attendees,
                 entries: allEntries
             )
+            try Task.checkCancellation()
             try save(report: built, entries: allEntries, in: job.sessionDirectory)
             transcriptWasSaved = true
             if recorder.sessionDirectory == job.sessionDirectory {
@@ -974,7 +994,7 @@ struct ContentView: View {
             )
             refreshSavedMeetings(preferredDirectory: recorder.sessionDirectory)
         } catch is CancellationError {
-            recorder.status = "Transcription cancelled — recordings preserved for retry"
+            recorder.status = "Generation stopped — recordings and any saved transcript were preserved"
         } catch {
             if TranscriptionRetryPolicy.shouldRetry(
                 attempt: attempt,
@@ -1008,6 +1028,7 @@ struct ContentView: View {
         transcript: String,
         hasSpokenConversation: Bool
     ) async throws {
+        try Task.checkCancellation()
         let configurations = APIProviderConfigurationStore.load()
         guard !configurations.isEmpty else {
             recorder.status = "Transcript saved — no API provider configured"
@@ -1027,18 +1048,23 @@ struct ContentView: View {
                     apiKey: key,
                     workspaceID: configuration.workspaceID
                 )
+                try Task.checkCancellation()
                 try notes.write(
                     to: job.sessionDirectory.appendingPathComponent("meeting-notes.md"),
                     atomically: true,
                     encoding: .utf8
                 )
+                try Task.checkCancellation()
                 if AutomaticMeetingEmailPolicy.shouldOpenDraft(
                     automaticDraftEnabled: autoOpenEmailDraftAfterNotes,
                     hasSpokenConversation: hasSpokenConversation
                 ) {
                     do {
+                        try Task.checkCancellation()
                         let outcome = try await prepareAutomaticEmail(notes: notes, job: job)
                         recorder.status = emailDraftStatus(for: outcome, notesWereJustSaved: true)
+                    } catch is CancellationError {
+                        throw CancellationError()
                     } catch {
                         recorder.status = "Meeting notes saved — email draft not opened"
                         processingFailure = MeetingProcessingFailure(
@@ -1054,6 +1080,9 @@ struct ContentView: View {
                 }
                 return
             } catch {
+                if error is CancellationError {
+                    throw CancellationError()
+                }
                 lastError = error
                 if APIFallbackPolicy.shouldTryNext(
                     after: error,
@@ -1070,6 +1099,7 @@ struct ContentView: View {
         notes: String,
         job: MeetingProcessingJob
     ) async throws -> MeetingEmailLaunchOutcome {
+        try Task.checkCancellation()
         let sender = MeetingEmailClient(rawValue: emailClientRawValue).flatMap {
             UserDefaults.standard.string(forKey: $0.senderAccountDefaultsKey)
         } ?? ""
@@ -1082,6 +1112,7 @@ struct ContentView: View {
             clientRawValue: emailClientRawValue,
             senderAccount: sender
         )
+        try Task.checkCancellation()
         return try await MeetingEmailLauncher.launch(prepared.draft, with: prepared.client)
     }
 
